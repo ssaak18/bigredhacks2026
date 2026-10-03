@@ -21,3 +21,70 @@
   font: 1rem/1.4 system-ui, sans-serif;
   text-align: center;
 }
+
+.aladin-star-map__status {
+  position: absolute;
+  left: 50%;
+  top: 4.5rem;
+  z-index: 2;
+  max-width: min(28rem, calc(100% - 2rem));
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(244, 241, 232, 0.18);
+  border-radius: 0.7rem;
+  background: rgba(5, 7, 13, 0.78);
+  color: #f4f1e8;
+  font: 0.9rem/1.4 system-ui, sans-serif;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.aladin-star-map__status p {
+  margin: 0;
+}
+
+.aladin-star-map__status button {
+  margin-top: 0.65rem;
+  border: 1px solid rgba(244, 241, 232, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.aladin-star-map__hud {
+  position: absolute;
+  left: 0.85rem;
+  bottom: 2.4rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+  max-width: min(36rem, calc(100% - 7rem));
+  color: rgba(244, 241, 232, 0.86);
+  font: 0.8rem/1.35 system-ui, sans-serif;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+
+.aladin-star-map__hud p {
+  margin: 0;
+}
+
+.aladin-star-map__hud button {
+  border: 1px solid rgba(244, 241, 232, 0.4);
+  border-radius: 999px;
+  background: rgba(5, 7, 13, 0.72);
+  color: #f4f1e8;
+  padding: 0.35rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.aladin-star-map__hud button:hover {
+  background: rgba(244, 241, 232, 0.12);
+}
+
+.aladin-star-map__constellation {
+  color: #f4d35e;
+}
