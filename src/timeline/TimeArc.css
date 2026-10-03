@@ -4,22 +4,39 @@
   right: 0;
   bottom: 0;
   z-index: 5;
-  height: 196px;
+  height: 220px;
   pointer-events: none;
   color: #f4f7ff;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
+.time-arc::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 176px;
+  background: linear-gradient(
+    to top,
+    rgba(3, 7, 16, 0.82) 0%,
+    rgba(5, 10, 22, 0.55) 52%,
+    rgba(5, 10, 22, 0) 100%
+  );
+  pointer-events: none;
+}
+
 .time-arc__readout {
   position: absolute;
   left: 50%;
-  top: 8px;
+  top: auto;
+  bottom: 10px;
   z-index: 1;
   display: grid;
   justify-items: center;
-  min-width: 180px;
+  min-width: 220px;
   margin: 0;
-  padding: 8px 14px 9px;
+  padding: 8px 16px 9px;
   border: 1px solid rgba(160, 190, 255, 0.26);
   border-radius: 16px;
   background: rgba(7, 13, 30, 0.82);
@@ -30,46 +47,67 @@
 }
 
 .time-arc__readout:focus-visible {
-  outline: 2px solid rgba(187, 209, 255, 0.8);
+  outline: 2px solid rgba(148, 174, 214, 0.8);
   outline-offset: 2px;
 }
 
-.time-arc__date,
-.time-arc__clock,
+.time-arc__parts,
 .time-arc__meta {
   margin: 0;
 }
 
-.time-arc__date {
-  color: #9eb5ff;
-  font-size: 0.72rem;
+.time-arc__parts {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  color: #f4f7ff;
+  font-size: 1.12rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  user-select: none;
 }
 
-.time-arc__clock {
-  margin-top: 2px;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
+.time-arc__part {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 2px 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.time-arc__part:hover,
+.time-arc__part:focus-visible {
+  background: rgba(148, 174, 214, 0.16);
+  outline: none;
+}
+
+.time-arc__rule {
+  color: #9eb0d4;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .time-arc__meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 3px;
   color: #bec8e3;
   font-size: 0.75rem;
 }
 
 .time-arc__now {
+  margin-left: 6px;
   border: 0;
   border-radius: 999px;
   padding: 2px 8px;
-  background: #bbd1ff;
+  background: #94aed6;
   color: #09142f;
   font: inherit;
   font-size: 0.72rem;
@@ -78,12 +116,12 @@
 }
 
 .time-arc__now:hover {
-  background: #d8e5ff;
+  background: #b7c8e4;
 }
 
 .time-arc__frame {
   position: absolute;
-  inset: 0;
+  inset: 0 0 62px;
 }
 
 .time-arc__svg {
@@ -102,7 +140,7 @@
 
 .time-arc__track {
   fill: none;
-  stroke: rgba(187, 209, 255, 0.45);
+  stroke: rgba(148, 174, 214, 0.5);
   stroke-width: 1.5;
   stroke-linecap: round;
 }
@@ -133,34 +171,45 @@
 }
 
 .time-arc__label {
-  fill: #d5def4;
+  fill: #eef3ff;
   font-size: 12px;
   font-weight: 600;
   text-anchor: middle;
   dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: rgba(4, 8, 18, 0.55);
+  stroke-width: 3px;
 }
 
 .time-arc__label--day {
-  fill: #f6c56b;
+  fill: #94aed6;
   font-size: 11px;
   letter-spacing: 0.04em;
 }
 
 .time-arc__needle line {
-  stroke: #f6c56b;
+  stroke: #94aed6;
   stroke-width: 1.5;
 }
 
 .time-arc__needle circle {
-  fill: #f6c56b;
+  fill: #94aed6;
 }
 
 @media (max-height: 760px) {
   .time-arc {
-    height: 150px;
+    height: 176px;
   }
 
-  .time-arc__clock {
-    font-size: 1.1rem;
+  .time-arc::before {
+    height: 148px;
+  }
+
+  .time-arc__parts {
+    font-size: 1rem;
+  }
+
+  .time-arc__frame {
+    inset: 0 0 54px;
   }
 }

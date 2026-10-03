@@ -1,0 +1,82 @@
+.sky-object-card {
+  position: absolute;
+  z-index: 4;
+  width: min(248px, calc(100vw - 32px));
+  padding: 12px 14px 10px;
+  border: 1px solid rgba(244, 247, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(8, 12, 24, 0.9);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+  color: #f4f7ff;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+  transform: translate(-50%, calc(-100% - 16px));
+}
+
+.sky-object-card--below {
+  transform: translate(-50%, 16px);
+}
+
+.sky-object-card__caret {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(244, 247, 255, 0.16);
+  border-bottom: 1px solid rgba(244, 247, 255, 0.16);
+  background: rgba(8, 12, 24, 0.9);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.sky-object-card--below .sky-object-card__caret {
+  top: -6px;
+  bottom: auto;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid rgba(244, 247, 255, 0.16);
+  border-top: 1px solid rgba(244, 247, 255, 0.16);
+}
+
+.sky-object-card__kind {
+  margin: 0;
+  color: #94aed6;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sky-object-card h2 {
+  margin: 4px 0 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.sky-object-card__coords,
+.sky-object-card__fact {
+  margin: 6px 0 0;
+  color: #d5def4;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.sky-object-card__close {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #94aed6;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sky-object-card__close:hover {
+  color: #d7e3f4;
+}

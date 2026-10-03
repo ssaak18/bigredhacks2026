@@ -2,6 +2,7 @@ import {
   angularDistanceDeg,
   raDecFromLocalOffsets,
 } from "../astro/localSky.js";
+import { catalogId } from "../data/celestialBodies";
 
 const MAX_SNAP_DEG = 8;
 const NAMED_ASSIGN_DEG = 3;
@@ -41,13 +42,14 @@ export function projectEuclideanToSky(
 }
 
 export function isWellKnown(star) {
+  if (star.kind && star.kind !== "star") return Boolean(star.name);
   return Boolean(star.name) && star.vmag <= WELL_KNOWN_MAG;
 }
 
 function nearestDistance(target, stars, used) {
   let nearest = Infinity;
   for (const star of stars) {
-    if (used.has(star.hip)) {
+    if (used.has(catalogId(star))) {
       continue;
     }
     const distance = angularDistanceDeg(target, star);
@@ -61,7 +63,10 @@ function nearestDistance(target, stars, used) {
 function pickStarForShape(target, stars, used) {
   const candidates = [];
   for (const star of stars) {
-    if (used.has(star.hip)) {
+    if (used.has(catalogId(star))) {
+      continue;
+    }
+    if (star.kind && star.kind !== "star") {
       continue;
     }
     const distance = angularDistanceDeg(target, star);
@@ -99,12 +104,13 @@ export function snapToNearestStars(
   projectedPoints,
   stars,
   zenith,
-  { unique = true, maxZenithDistanceDeg = 80 } = {},
+  { unique = true, maxZenithDistanceDeg = 80, excludeHips = [] } = {},
 ) {
   const visible = stars.filter(
     (star) => angularDistanceDeg(zenith, star) <= maxZenithDistanceDeg,
   );
-  const used = new Set();
+  // Stars that already belong to another constellation are off limits.
+  const used = new Set(excludeHips);
   const vertices = projectedPoints.map((point) => ({
     ...point,
     star: null,
@@ -130,7 +136,7 @@ export function snapToNearestStars(
 
   for (const claim of namedClaims) {
     const vertex = vertices[claim.pointIndex];
-    if (vertex.star || (unique && used.has(claim.star.hip))) {
+    if (vertex.star || (unique && used.has(catalogId(claim.star)))) {
       continue;
     }
     const closestAny = nearestDistance(vertex.target, visible, used);
@@ -140,7 +146,7 @@ export function snapToNearestStars(
     vertex.star = claim.star;
     vertex.snapDistanceDeg = claim.distance;
     if (unique) {
-      used.add(claim.star.hip);
+      used.add(catalogId(claim.star));
     }
   }
 
@@ -155,15 +161,19 @@ export function snapToNearestStars(
     vertex.star = picked.star;
     vertex.snapDistanceDeg = picked.distance;
     if (unique) {
-      used.add(picked.star.hip);
+      used.add(catalogId(picked.star));
     }
   }
 
   return vertices;
 }
 
+/**
+ * `zenith` decides which stars are above the horizon. `options.center` is where the
+ * drawing is laid out on the sky (the zenith when omitted).
+ */
 export function mapEuclideanConstellation(drawing, stars, zenith, options = {}) {
-  const projected = projectEuclideanToSky(drawing, zenith, options);
+  const projected = projectEuclideanToSky(drawing, options.center ?? zenith, options);
   const vertices = snapToNearestStars(projected, stars, zenith, options);
 
   return {

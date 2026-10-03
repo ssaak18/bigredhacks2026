@@ -19,12 +19,14 @@ function placeMarker(marker, ring, latitude, longitude) {
   );
 }
 
-export default function LocationGlobe({ place, time, onSelect }) {
+export default function LocationGlobe({ place, time = Date.now(), onSelect }) {
+  const rootRef = useRef(null);
   const stageRef = useRef(null);
   const worldRef = useRef(null);
   const placeRef = useRef(place);
   const onSelectRef = useRef(onSelect);
   const searchId = useId();
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [resultsOpen, setResultsOpen] = useState(false);
   const [globeError, setGlobeError] = useState("");
@@ -38,6 +40,16 @@ export default function LocationGlobe({ place, time, onSelect }) {
   const matches = searchPlaces(query);
 
   useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const stage = stageRef.current;
     if (!stage) return undefined;
 
@@ -237,7 +249,7 @@ export default function LocationGlobe({ place, time, onSelect }) {
       renderer.domElement.remove();
       worldRef.current = null;
     };
-  }, []);
+  }, [open]);
 
   const choosePlace = (next, face) => {
     onSelect(next);
@@ -271,76 +283,97 @@ export default function LocationGlobe({ place, time, onSelect }) {
   };
 
   return (
-    <section className="location-globe" data-layer="globe" aria-label="Earth">
-      <p className="location-globe__eyebrow">Observer</p>
-      <h2 className="location-globe__title">{formatPlaceName(place)}</h2>
-      <p className="location-globe__coords">{formatCoordinates(place.latitude, place.longitude)}</p>
-      <p className="location-globe__zenith">
-        Overhead {formatRightAscension(zenith.ra)} · {formatDeclination(zenith.dec)}
-      </p>
-
-      <div className="location-globe__search">
-        <label className="location-globe__label" htmlFor={searchId}>
-          Find a city
-        </label>
-        <input
-          id={searchId}
-          className="location-globe__input"
-          value={query}
-          placeholder="Tokyo, Cairo, Sydney…"
-          autoComplete="off"
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setResultsOpen(true);
-          }}
-          onFocus={() => setResultsOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && matches[0]) {
-              event.preventDefault();
-              choosePlace(matches[0], true);
-            }
-            if (event.key === "Escape") setResultsOpen(false);
-          }}
-        />
-        {resultsOpen && matches.length > 0 ? (
-          <ul className="location-globe__results">
-            {matches.map((match) => (
-              <li key={`${match.name}-${match.region}`}>
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    choosePlace(match, true);
-                  }}
-                >
-                  {match.name}
-                  <span>{match.region}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-
-      <div
-        ref={stageRef}
-        className="location-globe__stage"
-        role="img"
-        aria-label="Spinning Earth. Drag to turn the globe, click to look at the sky from that place."
-      />
-      {globeError ? <p className="location-globe__note" role="alert">{globeError}</p> : (
-        <p className="location-globe__hint">Drag to spin. Click a place to see its sky.</p>
-      )}
-
+    <div
+      ref={rootRef}
+      className={open ? "location-globe location-globe--open" : "location-globe"}
+      data-layer="globe"
+    >
       <button
         type="button"
-        className="location-globe__locate"
-        onClick={useMyLocation}
-        disabled={locating}
+        className="location-globe__compass"
+        aria-expanded={open}
+        aria-label={open ? "Close location picker" : `Choose location, currently ${formatPlaceName(place)}`}
+        onClick={() => setOpen((current) => !current)}
       >
-        {locating ? "Finding you…" : "Use my location"}
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="3" />
+          <path d="M32 10 L38 32 L32 54 L26 32 Z" fill="currentColor" />
+          <circle cx="32" cy="32" r="4" fill="#09142f" />
+        </svg>
       </button>
-      {locationNote ? <p className="location-globe__note" role="alert">{locationNote}</p> : null}
-    </section>
+      {open ? (
+        <section className="location-globe__card" aria-label="Earth">
+          <p className="location-globe__eyebrow">Observer</p>
+          <h2 className="location-globe__title">{formatPlaceName(place)}</h2>
+          <p className="location-globe__coords">{formatCoordinates(place.latitude, place.longitude)}</p>
+          <p className="location-globe__zenith">
+            Overhead {formatRightAscension(zenith.ra)} · {formatDeclination(zenith.dec)}
+          </p>
+
+          <div className="location-globe__search">
+            <label className="location-globe__label" htmlFor={searchId}>
+              Find a city
+            </label>
+            <input
+              id={searchId}
+              className="location-globe__input"
+              value={query}
+              placeholder="Tokyo, Cairo, Sydney…"
+              autoComplete="off"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setResultsOpen(true);
+              }}
+              onFocus={() => setResultsOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && matches[0]) {
+                  event.preventDefault();
+                  choosePlace(matches[0], true);
+                }
+                if (event.key === "Escape") setResultsOpen(false);
+              }}
+            />
+            {resultsOpen && matches.length > 0 ? (
+              <ul className="location-globe__results">
+                {matches.map((match) => (
+                  <li key={`${match.name}-${match.region}`}>
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        choosePlace(match, true);
+                      }}
+                    >
+                      {match.name}
+                      <span>{match.region}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
+          <div
+            ref={stageRef}
+            className="location-globe__stage"
+            role="img"
+            aria-label="Spinning Earth. Drag to turn the globe, click to look at the sky from that place."
+          />
+          {globeError ? <p className="location-globe__note" role="alert">{globeError}</p> : (
+            <p className="location-globe__hint">Drag to spin. Click a place to see its sky.</p>
+          )}
+
+          <button
+            type="button"
+            className="location-globe__locate"
+            onClick={useMyLocation}
+            disabled={locating}
+          >
+            {locating ? "Finding you…" : "Use my location"}
+          </button>
+          {locationNote ? <p className="location-globe__note" role="alert">{locationNote}</p> : null}
+        </section>
+      ) : null}
+    </div>
   );
 }

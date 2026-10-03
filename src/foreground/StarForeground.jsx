@@ -9,10 +9,10 @@ import "./StarForeground.css";
 /**
  * Upload -> analyze -> constellation workflow. Models run once per photo; the
  * star count only re-runs the cheap selection step. "Place in sky" hands the
- * result to the parent as a Euclidean drawing and otherwise knows nothing of
- * the map.
+ * result to the parent as a Euclidean drawing, plus the source photo and its
+ * label, and otherwise knows nothing of the map.
  */
-export default function StarForeground({ onConstellation }) {
+export default function StarForeground({ onConstellation, compact = false, hidden = false, onExpand }) {
   const [file, setFile] = useState(null);
   const [imageUrl, setImageUrl] = useState("");
   const [imageReady, setImageReady] = useState(false);
@@ -89,15 +89,27 @@ export default function StarForeground({ onConstellation }) {
 
   const place = () => {
     const name = analysis.label.replace(/^./, (letter) => letter.toUpperCase());
-    onConstellation?.(toEuclideanDrawing(constellation, { id: `photo-${analysis.label}`, name }));
+    onConstellation?.(
+      toEuclideanDrawing(constellation, { id: `photo-${analysis.label}`, name }),
+      { file, label: analysis.label },
+    );
+  };
+
+  const pickImage = (source) => {
+    onExpand?.();
+    handleImageSelected(source);
   };
 
   return (
     <div className="star-foreground" data-layer="foreground">
-      <div className="foreground-panel">
-        {!imageUrl ? (
-          <ImageUploader disabled={isProcessing} onImageSelected={handleImageSelected} />
-        ) : (
+      <header className="lucky-header">
+        <h1>Lucky Stars</h1>
+        {!compact && !imageUrl ? (
+          <ImageUploader disabled={isProcessing} onImageSelected={pickImage} />
+        ) : null}
+      </header>
+      {!hidden && !compact && imageUrl ? (
+        <div className="foreground-panel">
           <ImageViewer
             imageUrl={imageUrl}
             imageReady={imageReady}
@@ -120,9 +132,11 @@ export default function StarForeground({ onConstellation }) {
             pointCount={pointCount}
             onPointCountChange={setPointCount}
           />
-        )}
-        {error && <p className="vision-error" role="alert">{error}</p>}
-      </div>
+          {error && <p className="vision-error" role="alert">{error}</p>}
+        </div>
+      ) : error ? (
+        <p className="vision-error vision-error--float" role="alert">{error}</p>
+      ) : null}
     </div>
   );
 }

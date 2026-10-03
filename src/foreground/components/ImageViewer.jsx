@@ -92,7 +92,7 @@ export default function ImageViewer({
         <label className="debug-toggle">
           <input type="checkbox" checked={debug} onChange={(event) => onDebugChange(event.target.checked)} /> Debug
         </label>
-        <button className="analyze-button" type="button" onClick={onPlace} disabled={!constellation || isProcessing}>Place in sky</button>
+        <button className="analyze-button" type="button" onClick={onPlace} disabled={!constellation || isProcessing}>Place on the sky</button>
       </div>
     </section>
   );

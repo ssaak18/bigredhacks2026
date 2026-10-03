@@ -71,10 +71,69 @@ export function timeZoneAt(latitude, longitude) {
   }
 }
 
+function zonedParts(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = {};
+  for (const part of formatter.formatToParts(date)) {
+    if (part.type !== "literal") parts[part.type] = part.value;
+  }
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour) % 24,
+    minute: Number(parts.minute),
+  };
+}
+
+function offsetMs(date, timeZone) {
+  const parts = zonedParts(date, timeZone);
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute) - date.getTime();
+}
+
+function timestampFromZoned(parts, timeZone) {
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+  let date = new Date(asUtc);
+  date = new Date(asUtc - offsetMs(date, timeZone));
+  return new Date(asUtc - offsetMs(date, timeZone)).getTime();
+}
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Move a civil-time field at this place, keeping the other fields stable. */
+export function shiftZonedTime(timestamp, timeZone, unit, amount) {
+  if (!amount) return timestamp;
+  if (unit === "minute") return timestamp + amount * 60_000;
+  if (unit === "day") return timestamp + amount * 86_400_000;
+
+  const parts = zonedParts(new Date(timestamp), timeZone);
+  if (unit === "month") {
+    const index = parts.month - 1 + amount;
+    parts.year += Math.floor(index / 12);
+    parts.month = ((index % 12) + 12) % 12 + 1;
+    parts.day = Math.min(parts.day, daysInMonth(parts.year, parts.month));
+  } else if (unit === "year") {
+    parts.year += amount;
+    parts.day = Math.min(parts.day, daysInMonth(parts.year, parts.month));
+  }
+  return timestampFromZoned(parts, timeZone);
+}
+
 export function formatLocalClock(date, timeZone) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "long",
+    year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -90,18 +149,21 @@ export function formatLocalClock(date, timeZone) {
   const hour12 = hours % 12 || 12;
   const suffix = hours >= 12 ? "PM" : "AM";
   const weekdayShort = parts.weekday.slice(0, 3);
+  const military = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   return {
     weekday: parts.weekday,
     weekdayShort,
     month: parts.month,
     day: Number(parts.day),
+    year: Number(parts.year),
     hours,
     hour12,
     minutes,
     suffix,
-    clock: `${hour12}:${String(minutes).padStart(2, "0")} ${suffix}`,
-    hourLabel: `${hour12} ${suffix}`,
-    dateLine: `${parts.weekday}, ${parts.month} ${Number(parts.day)}`,
+    military,
+    clock: military,
+    hourLabel: military,
+    dateLine: `${parts.weekday}, ${parts.month} ${Number(parts.day)}, ${parts.year}`,
   };
 }
 

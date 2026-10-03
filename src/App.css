@@ -4,3 +4,36 @@
   height: 100%;
   overflow: hidden;
 }
+
+.layer-toggle {
+  position: absolute;
+  top: 16px;
+  right: 80px;
+  z-index: 6;
+  width: 52px;
+  height: 52px;
+  padding: 10px;
+  border: 1px solid rgba(148, 174, 214, 0.35);
+  border-radius: 50%;
+  background: rgba(7, 13, 30, 0.88);
+  color: #94aed6;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+}
+
+.layer-toggle svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.layer-toggle:hover,
+.layer-toggle--on {
+  color: #d7e3f4;
+  background: rgba(12, 20, 40, 0.94);
+}
+
+.layer-toggle--on {
+  outline: 2px solid rgba(148, 174, 214, 0.55);
+}

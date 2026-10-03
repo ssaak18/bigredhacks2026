@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-const KIND_COLOR = { part: "#83efff", outline: "#f5f9ff", corner: "#d6adff" };
+const KIND_COLOR = { part: "#9bb8d6", outline: "#f5f9ff", corner: "#7f9ec8" };
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
 /**

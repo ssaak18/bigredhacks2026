@@ -1,32 +1,71 @@
 .location-globe {
   position: absolute;
+  top: 16px;
   right: 16px;
-  bottom: 168px;
+  bottom: auto;
   z-index: 6;
-  width: min(300px, calc(100vw - 32px));
-  padding: 16px 16px 14px;
-  border: 1px solid rgba(160, 190, 255, 0.26);
-  border-radius: 20px;
-  background: rgba(7, 13, 30, 0.88);
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: #f4f7ff;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  backdrop-filter: blur(20px);
   pointer-events: auto;
+}
+
+.location-globe__compass {
+  width: 52px;
+  height: 52px;
+  padding: 8px;
+  border: 1px solid rgba(148, 174, 214, 0.35);
+  border-radius: 50%;
+  background: rgba(7, 13, 30, 0.88);
+  color: #94aed6;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+}
+
+.location-globe__compass svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.location-globe__compass:hover {
+  color: #d7e3f4;
+  background: rgba(12, 20, 40, 0.94);
+}
+
+.location-globe__card {
+  width: min(200px, calc(100vw - 32px));
+  max-height: calc(100vh - 252px);
+  overflow: auto;
+  padding: 10px 10px 9px;
+  border: 1px solid rgba(148, 174, 214, 0.26);
+  border-radius: 16px;
+  background: rgba(7, 13, 30, 0.88);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
 }
 
 .location-globe__eyebrow {
   margin: 0;
-  color: #9eb5ff;
-  font-size: 0.72rem;
+  color: #94aed6;
+  font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .location-globe__title {
-  margin: 4px 0 0;
-  font-size: 1.15rem;
+  margin: 3px 0 0;
+  font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -36,10 +75,10 @@
 .location-globe__zenith,
 .location-globe__hint,
 .location-globe__note {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: #bec8e3;
-  font-size: 0.82rem;
-  line-height: 1.35;
+  font-size: 0.72rem;
+  line-height: 1.3;
 }
 
 .location-globe__zenith {
@@ -48,7 +87,7 @@
 
 .location-globe__search {
   position: relative;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .location-globe__label {
@@ -65,17 +104,17 @@
 .location-globe__input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(160, 190, 255, 0.28);
-  border-radius: 10px;
-  padding: 8px 10px;
+  border: 1px solid rgba(148, 174, 214, 0.28);
+  border-radius: 8px;
+  padding: 6px 8px;
   background: rgba(4, 8, 20, 0.72);
   color: #f4f7ff;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
 }
 
 .location-globe__input:focus {
-  outline: 2px solid rgba(187, 209, 255, 0.7);
+  outline: 2px solid rgba(148, 174, 214, 0.7);
   outline-offset: 1px;
 }
 
@@ -88,8 +127,8 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  border: 1px solid rgba(160, 190, 255, 0.28);
-  border-radius: 12px;
+  border: 1px solid rgba(148, 174, 214, 0.28);
+  border-radius: 10px;
   background: rgba(8, 14, 32, 0.98);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
@@ -97,32 +136,32 @@
 .location-globe__results button {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   border: 0;
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 6px;
+  padding: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.76rem;
   text-align: left;
   cursor: pointer;
 }
 
 .location-globe__results button span {
   color: #9eb0d4;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
 }
 
 .location-globe__results button:hover {
-  background: rgba(187, 209, 255, 0.12);
+  background: rgba(148, 174, 214, 0.12);
 }
 
 .location-globe__stage {
-  width: min(220px, 100%);
+  width: min(147px, 100%);
   aspect-ratio: 1;
-  margin: 10px auto 0;
+  margin: 8px auto 0;
   border-radius: 50%;
   overflow: hidden;
   cursor: grab;
@@ -144,20 +183,20 @@
 
 .location-globe__locate {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 8px;
   border: 0;
-  border-radius: 10px;
-  padding: 9px 12px;
-  background: #bbd1ff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #94aed6;
   color: #09142f;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
 }
 
 .location-globe__locate:hover {
-  background: #d8e5ff;
+  background: #b7c8e4;
 }
 
 .location-globe__locate:disabled {
@@ -165,12 +204,23 @@
   opacity: 0.6;
 }
 
+@media (max-width: 720px) {
+  .location-globe__card {
+    width: min(168px, 38vw);
+  }
+}
+
 @media (max-height: 760px) {
-  .location-globe {
-    bottom: 128px;
+  .location-globe__card {
+    max-height: calc(100vh - 200px);
   }
 
   .location-globe__stage {
-    width: min(160px, 100%);
+    width: min(108px, 100%);
+  }
+
+  .location-globe__hint,
+  .location-globe__zenith {
+    display: none;
   }
 }

@@ -1,10 +1,65 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { formatLocalClock, sunAltitudeDegrees, timeZoneAt } from "../sky/localSky";
+import { formatLocalClock, shiftZonedTime, timeZoneAt } from "../sky/localSky";
 import "./TimeArc.css";
 
 const SPAN_HOURS = 8;
-const RANGE_MS = 7 * 24 * 3600000;
+const RANGE_MS = 40 * 365.25 * 24 * 3600000;
 const HOUR_MS = 3600000;
+const SCRUB = {
+  month: { unit: "month", px: 28 },
+  day: { unit: "day", px: 16 },
+  year: { unit: "year", px: 22 },
+  time: { unit: "minute", px: 4 },
+};
+
+function ScrubPart({ label, value, onScrub }) {
+  const originRef = useRef(null);
+
+  return (
+    <button
+      type="button"
+      className="time-arc__part"
+      aria-label={label}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // Capture is optional; move events still drive the scrub.
+        }
+        originRef.current = { x: event.clientX };
+        onScrub(0, true);
+      }}
+      onPointerMove={(event) => {
+        if (!originRef.current) return;
+        onScrub(event.clientX - originRef.current.x, false);
+      }}
+      onPointerUp={(event) => {
+        originRef.current = null;
+        try {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        } catch {
+          // Ignore missing capture.
+        }
+      }}
+      onPointerCancel={(event) => {
+        originRef.current = null;
+        try {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        } catch {
+          // Ignore missing capture.
+        }
+      }}
+    >
+      {value}
+    </button>
+  );
+}
 
 function arcGeometry(width, height) {
   const peakY = Math.min(92, Math.max(72, height * 0.42));
@@ -56,6 +111,7 @@ export default function TimeArc({ time, longitude, latitude, onTimeChange }) {
   const onTimeChangeRef = useRef(onTimeChange);
   const queuedRef = useRef(null);
   const rafRef = useRef(0);
+  const scrubOrigin = useRef({ time, field: null });
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   timeRef.current = time;
@@ -149,8 +205,24 @@ export default function TimeArc({ time, longitude, latitude, onTimeChange }) {
 
   const timeZone = timeZoneAt(latitude, longitude);
   const clock = formatLocalClock(new Date(time), timeZone);
-  const sunUp = sunAltitudeDegrees(latitude, longitude, new Date(time)) > -0.8;
   const awayFromNow = Math.abs(time - Date.now()) > 45 * 1000;
+
+  const clampTime = (next) => {
+    const now = Date.now();
+    return Math.min(now + RANGE_MS, Math.max(now - RANGE_MS, next));
+  };
+
+  const scrubField = (field, deltaX, restart) => {
+    const spec = SCRUB[field];
+    if (!spec) return;
+    if (restart) {
+      scrubOrigin.current = { time, field };
+      return;
+    }
+    if (scrubOrigin.current.field !== field) return;
+    const ticks = Math.round(deltaX / spec.px);
+    onTimeChange(clampTime(shiftZonedTime(scrubOrigin.current.time, timeZone, spec.unit, ticks)));
+  };
   const geo = size.width > 0 ? arcGeometry(size.width, size.height) : null;
   const ticks = [];
 
@@ -189,7 +261,7 @@ export default function TimeArc({ time, longitude, latitude, onTimeChange }) {
         aria-valuemin={Date.now() - RANGE_MS}
         aria-valuemax={Date.now() + RANGE_MS}
         aria-valuenow={time}
-        aria-valuetext={`${clock.dateLine}, ${clock.clock}, local time`}
+        aria-valuetext={`${clock.month} ${clock.day}, ${clock.year}, ${clock.military} local time`}
         aria-label="Time at the selected place"
         onKeyDown={(event) => {
           if (event.key === "ArrowRight") {
@@ -204,10 +276,14 @@ export default function TimeArc({ time, longitude, latitude, onTimeChange }) {
           }
         }}
       >
-        <p className="time-arc__date" id={labelId}>{clock.dateLine}</p>
-        <p className="time-arc__clock">{clock.clock}</p>
-        <p className="time-arc__meta">
-          {sunUp ? "Daylight" : "Night"} · local time · scroll the arc
+        <p className="time-arc__parts" id={labelId}>
+          <ScrubPart label="Month" value={clock.month} onScrub={(dx, restart) => scrubField("month", dx, restart)} />
+          <span className="time-arc__rule" aria-hidden="true">|</span>
+          <ScrubPart label="Day" value={clock.day} onScrub={(dx, restart) => scrubField("day", dx, restart)} />
+          <span className="time-arc__rule" aria-hidden="true">|</span>
+          <ScrubPart label="Year" value={clock.year} onScrub={(dx, restart) => scrubField("year", dx, restart)} />
+          <span className="time-arc__rule" aria-hidden="true">|</span>
+          <ScrubPart label="Time" value={clock.military} onScrub={(dx, restart) => scrubField("time", dx, restart)} />
           {awayFromNow ? (
             <button type="button" className="time-arc__now" onClick={() => onTimeChange(Date.now())}>
               Now
