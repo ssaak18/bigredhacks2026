@@ -1,196 +1,102 @@
 #!/usr/bin/env node
-
+/**
+ * Runs the real constellation pipeline over a folder of photos and writes each
+ * photo back with its constellation drawn on top.
+ *
+ *   npm run test:images -- [--points 18] [--tap 0.5,0.6] [inputDir=test_images] [outputDir=test_images/output]
+ *
+ * --tap x,y (fractions of the photo) picks the subject under that point, like
+ * tapping it in the app.
+ */
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { pipeline, RawImage } from "@huggingface/transformers";
-import { findCurvatureCandidates } from "../src/foreground/vision/curvature.js";
-import { mergeCandidates, scoreCandidates } from "../src/foreground/vision/scoring.js";
-import { createConstellationEdges, selectRepresentativePoints } from "../src/foreground/vision/selectPoints.js";
+import { INFERENCE_SIZE, POINT_COUNT } from "../src/foreground/vision/config.js";
+import { analyzeImage } from "../src/foreground/vision/analyze.js";
+import { buildConstellation } from "../src/foreground/vision/constellation.js";
+import { createModels } from "../src/foreground/vision/models.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const supportedExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-const targetPoints = 9;
+const extensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const colors = { part: "#83efff", outline: "#ffffff", corner: "#d6adff" };
 
-const sourceColor = { semantic: "#83efff", curvature: "#ffbd75", corner: "#d6adff" };
+const args = process.argv.slice(2);
+const flag = args.indexOf("--points");
+const pointCount = flag >= 0 ? Number(args.splice(flag, 2)[1]) : POINT_COUNT.default;
+const tapFlag = args.indexOf("--tap");
+const [tapX, tapY] = tapFlag >= 0 ? args.splice(tapFlag, 2)[1].split(",").map(Number) : [];
+const tap = tapFlag >= 0 ? { x: tapX, y: tapY } : undefined;
+const inputDirectory = path.resolve(projectRoot, args[0] || "test_images");
+const outputDirectory = path.resolve(projectRoot, args[1] || "test_images/output");
 
 async function findImages(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return findImages(entryPath);
-    return supportedExtensions.has(path.extname(entry.name).toLowerCase()) ? [entryPath] : [];
+  const nested = await Promise.all(entries.map((entry) => {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return entry.name === path.basename(outputDirectory) ? [] : findImages(full);
+    return extensions.has(path.extname(entry.name).toLowerCase()) ? [full] : [];
   }));
   return nested.flat();
 }
 
-async function loadImageForInference(file) {
-  const { data, info } = await sharp(file)
-    .rotate()
-    .resize({ width: 896, height: 896, fit: "inside", withoutEnlargement: true })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  return new RawImage(new Uint8ClampedArray(data), info.width, info.height, 4);
-}
-
-function maskToBinary(mask) {
-  const channels = mask.channels || Math.max(1, Math.round(mask.data.length / (mask.width * mask.height)));
-  const binary = new Uint8Array(mask.width * mask.height);
-  for (let index = 0; index < binary.length; index += 1) {
-    const value = mask.data[index * channels + (channels === 4 ? 3 : 0)] || 0;
-    binary[index] = value > 24 ? 1 : 0;
-  }
-  return binary;
-}
-
-function primarySubjectScore(mask, confidence) {
-  let area = 0;
-  let sumX = 0;
-  let sumY = 0;
-  for (let index = 0; index < mask.length; index += 1) {
-    if (!mask[index]) continue;
-    area += 1;
-    sumX += index % mask.width;
-    sumY += Math.floor(index / mask.width);
-  }
-  if (!area) return 0;
-  const areaScore = Math.min(1, area / (mask.width * mask.height * 0.22));
-  const centerX = sumX / area / mask.width;
-  const centerY = sumY / area / mask.height;
-  const centerBias = 0.55 + 0.45 * (1 - Math.min(1, Math.hypot(centerX - 0.5, centerY - 0.5) / Math.SQRT1_2));
-  return (confidence ?? 0.5) * areaScore * centerBias;
-}
-
-/** Gets the largest connected component and a compact, ordered boundary. */
-function traceSilhouette(binary, width, height) {
-  const seen = new Uint8Array(binary.length);
-  let largest = [];
-  const adjacent = [-1, 0, 1, 0, -1];
-  for (let start = 0; start < binary.length; start += 1) {
-    if (!binary[start] || seen[start]) continue;
-    const component = [];
-    const queue = [start];
-    seen[start] = 1;
-    for (let head = 0; head < queue.length; head += 1) {
-      const index = queue[head];
-      component.push(index);
-      const x = index % width;
-      const y = Math.floor(index / width);
-      for (let step = 0; step < 4; step += 1) {
-        const nextX = x + adjacent[step];
-        const nextY = y + adjacent[step + 1];
-        const nextIndex = nextY * width + nextX;
-        if (nextX >= 0 && nextX < width && nextY >= 0 && nextY < height && binary[nextIndex] && !seen[nextIndex]) {
-          seen[nextIndex] = 1;
-          queue.push(nextIndex);
-        }
-      }
-    }
-    if (component.length > largest.length) largest = component;
-  }
-  if (largest.length < 24) return [];
-
-  let sumX = 0;
-  let sumY = 0;
-  const boundary = largest.filter((index) => {
-    const x = index % width;
-    const y = Math.floor(index / width);
-    sumX += x; sumY += y;
-    return x === 0 || y === 0 || x === width - 1 || y === height - 1 ||
-      !binary[index - 1] || !binary[index + 1] || !binary[index - width] || !binary[index + width];
-  });
-  const center = { x: sumX / largest.length, y: sumY / largest.length };
-  // A polar ordering is a compact fallback for Node, where browser OpenCV is unavailable.
-  const ordered = boundary.sort((a, b) => {
-    const angleA = Math.atan2(Math.floor(a / width) - center.y, a % width - center.x);
-    const angleB = Math.atan2(Math.floor(b / width) - center.y, b % width - center.x);
-    return angleA - angleB;
-  });
-  const stride = Math.max(1, Math.ceil(ordered.length / 720));
-  return ordered.filter((_, index) => index % stride === 0).map((index) => ({
-    x: (index % width) / width,
-    y: Math.floor(index / width) / height,
-  }));
-}
-
-function createCornerCandidates(contour) {
-  const count = Math.min(24, Math.max(8, Math.floor(contour.length / 12)));
-  const stride = Math.max(1, Math.floor(contour.length / count));
-  return contour.filter((_, index) => index % stride === 0).slice(0, 30).map((point) => ({
-    ...point, source: "corner", semanticScore: 0, curvatureScore: 0.28,
-    preservationScore: 0.5, spacingScore: 0, distinctivenessScore: 0.3, totalScore: 0,
-  }));
-}
-
-function makeOverlaySvg(width, height, points, edges) {
-  const lines = edges.map(([from, to]) => `<line x1="${points[from].x * width}" y1="${points[from].y * height}" x2="${points[to].x * width}" y2="${points[to].y * height}" />`).join("");
-  const dots = points.map((point) => {
-    const x = point.x * width;
-    const y = point.y * height;
-    const color = sourceColor[point.source] || "#f5f9ff";
-    return `<circle cx="${x}" cy="${y}" r="11" fill="${color}" fill-opacity=".28"/><circle cx="${x}" cy="${y}" r="4.5" fill="#f5f9ff" stroke="${color}" stroke-width="3"/>`;
+function overlaySvg(width, height, constellation) {
+  const byId = new Map(constellation.points.map((point) => [point.id, point]));
+  const px = (point) => `x="${point.x * width}" y="${point.y * height}"`;
+  const lines = constellation.lines.map(({ from, to }) => {
+    const a = byId.get(from);
+    const b = byId.get(to);
+    return `<line x1="${a.x * width}" y1="${a.y * height}" x2="${b.x * width}" y2="${b.y * height}"/>`;
   }).join("");
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><g stroke="#b9d2ff" stroke-width="3" stroke-linecap="round" opacity=".85">${lines}</g>${dots}</svg>`);
+  const dots = constellation.points.map((point) => {
+    const cx = point.x * width;
+    const cy = point.y * height;
+    const label = point.part ? `<text ${px({ x: point.x + 0.012, y: point.y - 0.012 })} fill="#83efff" font-size="${height * 0.03}" font-family="sans-serif">${point.part}</text>` : "";
+    return `<circle cx="${cx}" cy="${cy}" r="${height * 0.02}" fill="${colors[point.kind]}" fill-opacity=".3"/><circle cx="${cx}" cy="${cy}" r="${height * 0.007}" fill="${colors[point.kind]}"/>${label}`;
+  }).join("");
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><g stroke="#ffe08a" stroke-width="${height * 0.004}" stroke-linecap="round" opacity=".9">${lines}</g>${dots}</svg>`);
 }
 
-async function createSegmenter() {
-  console.log("Loading the local segmentation model (first run downloads and caches it)…");
-  return pipeline("image-segmentation", "Xenova/segformer-b0-finetuned-ade-512-512", {
-    device: "cpu",
-    dtype: "q8",
-    progress_callback: ({ status, progress }) => {
-      if (status === "progress" && Number.isFinite(progress)) process.stdout.write(`\rModel download: ${Math.round(progress)}%`);
-    },
-  });
-}
-
-async function annotateImage(segmenter, inputFile, outputFile) {
-  const inferenceImage = await loadImageForInference(inputFile);
-  const segments = await segmenter(inferenceImage, { subtask: "semantic" });
-  const primary = segments.map((segment) => {
-    const binary = maskToBinary(segment.mask);
-    binary.width = segment.mask.width;
-    binary.height = segment.mask.height;
-    return { segment, binary, score: primarySubjectScore(binary, segment.score) };
-  }).sort((a, b) => b.score - a.score)[0];
-  if (!primary?.score) throw new Error("No usable foreground segment was found.");
-
-  const contour = traceSilhouette(primary.binary, primary.binary.width, primary.binary.height);
-  if (contour.length < 8) throw new Error("The selected segment did not have a usable silhouette.");
-  const curvature = findCurvatureCandidates(contour);
-  const candidates = scoreCandidates(mergeCandidates([...curvature, ...createCornerCandidates(contour)]), contour);
-  const points = selectRepresentativePoints(candidates, { target: targetPoints });
-  if (points.length < 2) throw new Error("Too few distinct points were found.");
-  const edges = createConstellationEdges(points);
-
-  const original = sharp(inputFile).rotate();
-  const metadata = await original.metadata();
-  await original.composite([{ input: makeOverlaySvg(metadata.width, metadata.height, points, edges), top: 0, left: 0 }]).png().toFile(outputFile);
-  return { points: points.length, label: primary.segment.label || "subject" };
-}
-
-const inputDirectory = path.resolve(projectRoot, process.argv[2] || "test_images");
-const outputDirectory = path.resolve(projectRoot, process.argv[3] || "test_images/output");
 const images = await findImages(inputDirectory);
-if (!images.length) throw new Error(`No JPG, PNG, or WebP files found in ${inputDirectory}.`);
+if (!images.length) throw new Error(`No JPG, PNG or WebP files found in ${inputDirectory}.`);
 await mkdir(outputDirectory, { recursive: true });
-const segmenter = await createSegmenter();
-console.log("");
+
+const models = createModels({
+  device: "cpu",
+  onProgress: (message) => process.stdout.write(`\r${message}      `),
+});
 
 let failures = 0;
-for (const inputFile of images) {
-  const relative = path.relative(inputDirectory, inputFile);
-  const outputFile = path.join(outputDirectory, `${relative.replace(/\.[^.]+$/, "")}.constellation.png`);
-  await mkdir(path.dirname(outputFile), { recursive: true });
+for (const file of images) {
+  const name = path.relative(inputDirectory, file);
   try {
-    const result = await annotateImage(segmenter, inputFile, outputFile);
-    console.log(`✓ ${relative}: ${result.points} points (${result.label}) → ${path.relative(projectRoot, outputFile)}`);
+    const { data, info } = await sharp(file)
+      .rotate()
+      .resize({ width: INFERENCE_SIZE, height: INFERENCE_SIZE, fit: "inside", withoutEnlargement: true })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const image = { width: info.width, height: info.height, data: new Uint8ClampedArray(data) };
+
+    const started = performance.now();
+    const analysis = await analyzeImage(image, models, undefined, { point: tap, photoKey: name });
+    const constellation = buildConstellation(analysis, pointCount);
+    const seconds = ((performance.now() - started) / 1000).toFixed(1);
+
+    const output = path.join(outputDirectory, `${path.parse(name).name}.constellation.png`);
+    await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+      .composite([{ input: overlaySvg(info.width, info.height, constellation) }])
+      .png()
+      .toFile(output);
+
+    const parts = constellation.points.filter((point) => point.part).map((point) => point.part).join(", ");
+    console.log(`\n✓ ${name}: ${analysis.label}, ${constellation.points.length} points, ${constellation.lines.length} lines in ${seconds}s${parts ? ` [${parts}]` : ""}`);
+    const { score, reason } = analysis.confidence;
+    console.log(`  subject confidence ${score.toFixed(2)}${reason ? ` - ${reason}` : ``}`);
+    if (analysis.warning) console.warn(`  ! ${analysis.warning}`);
   } catch (error) {
     failures += 1;
-    console.error(`✗ ${relative}: ${error.message}`);
+    console.error(`\n✗ ${name}: ${error.stack || error.message}`);
   }
 }
-
-if (failures) process.exitCode = 1;
+process.exitCode = failures ? 1 : 0;

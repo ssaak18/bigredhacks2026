@@ -1,48 +1,63 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ImageUploader from "./components/ImageUploader";
 import ImageViewer from "./components/ImageViewer";
-import { runVisionPipeline } from "./vision/runVisionPipeline";
-import { disposeSegmentationWorker } from "./vision/segmentation";
-import { createConstellationEdges, selectRepresentativePoints } from "./vision/selectPoints";
+import { analyzePhoto, disposeVisionWorker } from "./vision/client";
+import { buildConstellation, toEuclideanDrawing } from "./vision/constellation";
+import { POINT_COUNT } from "./vision/config";
 import "./StarForeground.css";
 
-function waitForDecodedImage(image) {
-  if (image?.complete && image.naturalWidth) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    image?.addEventListener("load", resolve, { once: true });
-    image?.addEventListener("error", () => reject(new Error("This image could not be decoded.")), { once: true });
-  });
-}
-
 /**
- * The foreground owns its complete upload-to-points workflow. It intentionally
- * knows nothing about the map and remains a transparent layer over it.
+ * Upload -> analyze -> constellation workflow. Models run once per photo; the
+ * star count only re-runs the cheap selection step. "Place in sky" hands the
+ * result to the parent as a Euclidean drawing and otherwise knows nothing of
+ * the map.
  */
-export default function StarForeground() {
-  const imageRef = useRef(null);
+export default function StarForeground({ onConstellation }) {
   const [file, setFile] = useState(null);
   const [imageUrl, setImageUrl] = useState("");
-  const [result, setResult] = useState(null);
+  const [imageReady, setImageReady] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [pointCount, setPointCount] = useState(POINT_COUNT.default);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [pointCount, setPointCount] = useState(9);
   const [debug, setDebug] = useState(false);
-  const [imageReady, setImageReady] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+
+  const generated = useMemo(
+    () => (analysis ? buildConstellation(analysis, pointCount) : null),
+    [analysis, pointCount],
+  );
+
+  // Hand-moved stars (debug mode) belong to one generated constellation and are dropped with it.
+  const [edits, setEdits] = useState({ base: null, moved: {} });
+  const moved = edits.base === generated ? edits.moved : null;
+  const constellation = useMemo(
+    () => (generated && moved
+      ? { ...generated, points: generated.points.map((point) => (moved[point.id] ? { ...point, ...moved[point.id] } : point)) }
+      : generated),
+    [generated, moved],
+  );
+  const movePoint = (id, position) => setEdits((previous) => ({
+    base: generated,
+    moved: { ...(previous.base === generated ? previous.moved : {}), [id]: position },
+  }));
+  const resetPoints = () => setEdits({ base: null, moved: {} });
 
   useEffect(() => () => {
     if (imageUrl) URL.revokeObjectURL(imageUrl);
   }, [imageUrl]);
 
-  useEffect(() => () => disposeSegmentationWorker(), []);
+  useEffect(() => () => disposeVisionWorker(), []);
 
   const clearImage = () => {
     setFile(null);
     setImageUrl("");
-    setResult(null);
+    setAnalysis(null);
     setProgress("");
     setError("");
     setImageReady(false);
+    setChoosing(false);
   };
 
   const handleImageSelected = ({ file: nextFile, error: nextError }) => {
@@ -50,39 +65,31 @@ export default function StarForeground() {
     if (!nextFile) return;
     setFile(nextFile);
     setImageUrl(URL.createObjectURL(nextFile));
-    setResult(null);
+    setAnalysis(null);
     setProgress("");
     setImageReady(false);
+    setChoosing(false);
   };
 
-  const analyzeImage = async () => {
-    if (!file || !imageRef.current || !imageReady) {
-      setError("Wait for the image preview to finish loading, then try again.");
-      return;
-    }
+  // With a `point` the subject is whatever the user tapped; otherwise it is found automatically.
+  const analyze = async (point) => {
     setIsProcessing(true);
+    setChoosing(false);
     setError("");
-    setResult(null);
+    setAnalysis(null);
     try {
-      await waitForDecodedImage(imageRef.current);
-      const nextResult = await runVisionPipeline(file, imageRef.current, setProgress, pointCount);
-      setResult(nextResult);
-      setProgress("");
+      setAnalysis(await analyzePhoto(file, { photoKey: imageUrl, point }, setProgress));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The image could not be processed.");
-      setProgress("");
     } finally {
+      setProgress("");
       setIsProcessing(false);
     }
   };
 
-  const handlePointCountChange = (nextCount) => {
-    setPointCount(nextCount);
-    setResult((current) => {
-      if (!current) return current;
-      const selectedPoints = selectRepresentativePoints(current.candidates, { target: nextCount });
-      return { ...current, selectedPoints, edges: createConstellationEdges(selectedPoints) };
-    });
+  const place = () => {
+    const name = analysis.label.replace(/^./, (letter) => letter.toUpperCase());
+    onConstellation?.(toEuclideanDrawing(constellation, { id: `photo-${analysis.label}`, name }));
   };
 
   return (
@@ -93,19 +100,25 @@ export default function StarForeground() {
         ) : (
           <ImageViewer
             imageUrl={imageUrl}
-            imageRef={imageRef}
             imageReady={imageReady}
             onImageReady={() => setImageReady(true)}
             onImageError={() => setError("This image could not be decoded. Choose another JPG, PNG, or WebP image.")}
-            result={result}
+            analysis={analysis}
+            constellation={constellation}
             isProcessing={isProcessing}
             progress={progress}
-            onAnalyze={analyzeImage}
+            onAnalyze={() => analyze()}
+            choosing={choosing}
+            onChoosingChange={setChoosing}
+            onChooseSubject={analyze}
             onClear={clearImage}
+            onPlace={place}
+            onMovePoint={movePoint}
+            onResetPoints={moved && Object.keys(moved).length ? resetPoints : null}
             debug={debug}
             onDebugChange={setDebug}
             pointCount={pointCount}
-            onPointCountChange={handlePointCountChange}
+            onPointCountChange={setPointCount}
           />
         )}
         {error && <p className="vision-error" role="alert">{error}</p>}

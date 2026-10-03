@@ -11,13 +11,13 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
-    "@mediapipe/tasks-vision": "^1.0.1",
     "aladin-lite": "^3.9.2-beta",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.5.2",
+    "sharp": "^0.35.5",
     "vite": "^6.3.5"
   }
 }

@@ -5,7 +5,10 @@ import {
   formatLongitude,
   zenithRaDec,
 } from "../astro/localSky";
-import { addConstellationLayer } from "../constellations/aladinLayer";
+import {
+  addConstellationLayer,
+  removeConstellationLayer,
+} from "../constellations/aladinLayer";
 import { circleConstellation } from "../constellations/examples";
 import { mapEuclideanConstellation } from "../constellations/mapToStars";
 import hipparcosBright from "../data/hipparcosBright.json";
@@ -24,11 +27,14 @@ function geolocationErrorMessage(error) {
   return "Could not read your location.";
 }
 
-export default function AladinStarMap() {
+const defaultDrawing = circleConstellation();
+
+export default function AladinStarMap({ drawing }) {
   const viewRef = useRef(null);
   const aladinRef = useRef(null);
   const locationRef = useRef(null);
-  const constellationPlottedRef = useRef(false);
+  const layerRef = useRef(null);
+  const drawingRef = useRef(drawing ?? defaultDrawing);
   const [initError, setInitError] = useState(null);
   const [locationStatus, setLocationStatus] = useState("requesting");
   const [locationError, setLocationError] = useState(null);
@@ -57,10 +63,11 @@ export default function AladinStarMap() {
     aladin.gotoRaDec(zenith.ra, zenith.dec);
   };
 
-  const plotLocalConstellation = () => {
+  // Replaces whatever constellation is plotted with the latest drawing.
+  const plotConstellation = () => {
     const aladin = aladinRef.current;
     const location = locationRef.current;
-    if (!aladin || !location || constellationPlottedRef.current) {
+    if (!aladin || !location) {
       return;
     }
 
@@ -70,18 +77,26 @@ export default function AladinStarMap() {
       new Date(),
     );
     const mapped = mapEuclideanConstellation(
-      circleConstellation(),
+      drawingRef.current,
       hipparcosBright,
       zenith,
       { spanDeg: 36 },
     );
-    addConstellationLayer(aladin, mapped);
-    constellationPlottedRef.current = true;
+    if (layerRef.current) {
+      removeConstellationLayer(aladin, layerRef.current);
+    }
+    layerRef.current = addConstellationLayer(aladin, mapped);
     setConstellation({
       name: mapped.name,
       starCount: mapped.vertices.filter((vertex) => vertex.star).length,
     });
   };
+
+  // Re-plot when a new drawing arrives (a no-op until the map and location are ready).
+  useEffect(() => {
+    drawingRef.current = drawing ?? defaultDrawing;
+    plotConstellation();
+  }, [drawing]);
 
   useEffect(() => {
     const container = viewRef.current;
@@ -117,7 +132,7 @@ export default function AladinStarMap() {
           updateSkyLabel(locationRef.current);
           if (firstFix) {
             recenterToLocalSky();
-            plotLocalConstellation();
+            plotConstellation();
           }
         },
         (error) => {
@@ -181,6 +196,7 @@ export default function AladinStarMap() {
       }
       window.clearInterval(skyTimer);
       aladinRef.current = null;
+      layerRef.current = null;
       container.replaceChildren();
     };
   }, []);

@@ -3,6 +3,11 @@ import A from "aladin-lite";
 const LINE_COLOR = "#f4d35e";
 const STAR_COLOR = "#ffe8a3";
 
+export function removeConstellationLayer(aladin, layer) {
+  aladin.removeOverlay(layer.overlay);
+  aladin.removeOverlay(layer.catalog);
+}
+
 export function addConstellationLayer(aladin, mapped) {
   const overlay = A.graphicOverlay({
     color: LINE_COLOR,
