@@ -12,6 +12,7 @@ import StarForeground from "./foreground/StarForeground";
 import LocationGlobe from "./globe/LocationGlobe";
 import { ITHACA } from "./globe/places";
 import AladinStarMap from "./map/AladinStarMap";
+import RecenterButton from "./map/RecenterButton";
 import TelescopeToggle from "./map/TelescopeToggle";
 import SavedConstellations from "./saved/SavedConstellations";
 import TimeArc from "./timeline/TimeArc";
@@ -31,6 +32,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [skyObject, setSkyObject] = useState(null);
   const [telescope, setTelescope] = useState(true);
+  const [recenterRequest, setRecenterRequest] = useState(0);
 
   // Visible for the current place on this local calendar day. The key stays
   // stable while the timeline is scrubbed within that day.
@@ -137,6 +139,7 @@ export default function App() {
             setSkyObject(null);
           }
         }}
+        recenterRequest={recenterRequest}
       />
       <StarForeground
         onConstellation={placeDraft}
@@ -155,6 +158,7 @@ export default function App() {
         }}
         onDelete={deleteSaved}
       />
+      <RecenterButton onClick={() => setRecenterRequest((current) => current + 1)} />
       <TelescopeToggle on={telescope} onToggle={() => setTelescope((current) => !current)} />
       <LocationGlobe place={place} time={time} onSelect={setPlace} />
       <TimeArc

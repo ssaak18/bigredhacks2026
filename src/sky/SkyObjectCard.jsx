@@ -1,11 +1,10 @@
-import { displayName, factFor, KIND_LABELS } from "../data/celestialBodies";
+import { displayName, KIND_LABELS } from "../data/celestialBodies";
 import { formatDeclination, formatRightAscension } from "./localSky";
 import "./SkyObjectCard.css";
 
 export default function SkyObjectCard({ object, anchor, onClose }) {
   if (!object || !anchor) return null;
   const kind = KIND_LABELS[object.kind || "star"] || "Object";
-  const fact = object.fact || factFor(object);
 
   return (
     <aside
@@ -21,7 +20,6 @@ export default function SkyObjectCard({ object, anchor, onClose }) {
         {formatRightAscension(object.ra)} · {formatDeclination(object.dec)}
         {object.vmag != null ? ` · mag ${object.vmag.toFixed(1)}` : ""}
       </p>
-      {fact ? <p className="sky-object-card__fact">{fact}</p> : null}
       <button type="button" className="sky-object-card__close" onClick={onClose}>
         Close
       </button>

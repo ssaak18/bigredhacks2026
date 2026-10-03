@@ -100,15 +100,17 @@ export default function StarForeground({ onConstellation, compact = false, hidde
     handleImageSelected(source);
   };
 
+  const showPanel = !hidden && !compact && Boolean(imageUrl);
+
   return (
     <div className="star-foreground" data-layer="foreground">
       <header className="lucky-header">
         <h1>Lucky Stars</h1>
-        {!compact && !imageUrl ? (
+        {!showPanel ? (
           <ImageUploader disabled={isProcessing} onImageSelected={pickImage} />
         ) : null}
       </header>
-      {!hidden && !compact && imageUrl ? (
+      {showPanel ? (
         <div className="foreground-panel">
           <ImageViewer
             imageUrl={imageUrl}

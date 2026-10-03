@@ -37,3 +37,7 @@
 .layer-toggle--on {
   outline: 2px solid rgba(148, 174, 214, 0.55);
 }
+
+.layer-toggle--recenter {
+  right: 144px;
+}

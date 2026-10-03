@@ -275,6 +275,7 @@ export default function AladinStarMap({
   onCloseObject,
   onSkyClick,
   onMove,
+  recenterRequest = 0,
 }) {
   const viewRef = useRef(null);
   const aladinRef = useRef(null);
@@ -632,6 +633,19 @@ export default function AladinStarMap({
   useEffect(() => {
     syncObjectPin();
   }, [skyObject, mapReady]);
+
+  useEffect(() => {
+    if (!recenterRequest) return;
+    const aladin = aladinRef.current;
+    if (!aladin) return;
+    const current = placeRef.current;
+    showLocalSky(aladin, current.latitude, current.longitude, new Date(current.time), {
+      animate: true,
+      frame: true,
+      view: viewRef.current,
+    });
+    syncPins();
+  }, [recenterRequest]);
 
   return (
     <div className={`aladin-star-map${placing ? " aladin-star-map--placing" : ""}${telescope ? " aladin-star-map--telescope" : ""}`} data-layer="starmap">

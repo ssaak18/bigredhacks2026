@@ -57,8 +57,7 @@
   text-transform: none;
 }
 
-.sky-object-card__coords,
-.sky-object-card__fact {
+.sky-object-card__coords {
   margin: 6px 0 0;
   color: #d5def4;
   font-size: 0.8rem;

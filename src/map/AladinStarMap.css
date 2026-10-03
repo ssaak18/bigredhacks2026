@@ -16,9 +16,12 @@
 }
 
 .aladin-star-map__view,
-.aladin-star-map__view .aladin-container,
-.aladin-star-map__view canvas {
+.aladin-star-map__view .aladin-container {
   background: #02040a !important;
+}
+
+.aladin-star-map__view canvas {
+  background: transparent !important;
 }
 
 .aladin-star-map__view {

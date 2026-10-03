@@ -16,7 +16,7 @@
   display: grid;
   justify-items: start;
   gap: 12px;
-  max-width: calc(100vw - 96px);
+  max-width: calc(100vw - 220px);
   pointer-events: auto;
 }
 
