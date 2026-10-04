@@ -1,0 +1,25 @@
+{
+  "name": "bigredhacks2026",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:images": "node scripts/batch-constellations.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
+    "aladin-lite": "^3.9.2-beta",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.186.1",
+    "tz-lookup": "^6.1.25"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.5.2",
+    "sharp": "^0.35.5",
+    "vite": "^6.3.5"
+  }
+}

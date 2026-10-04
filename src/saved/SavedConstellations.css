@@ -1,0 +1,273 @@
+.saved-constellations {
+  position: absolute;
+  top: 92px;
+  left: 20px;
+  right: auto;
+  z-index: 6;
+  display: grid;
+  gap: 12px;
+  width: min(280px, calc(100vw - 96px));
+  max-height: calc(100vh - 252px);
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f4f7ff;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.saved-constellations--inspect {
+  inset: 0;
+  z-index: 20;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  transform: none;
+}
+
+.saved-constellations__note,
+.saved-constellations__error {
+  margin: 4px 0 0;
+  color: #c9d6ea;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.saved-constellations__error {
+  color: #c5d4ea;
+}
+
+.saved-constellations__draft {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 174, 214, 0.35);
+  background: rgba(7, 18, 36, 0.88);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+
+.saved-constellations__field {
+  display: grid;
+  gap: 4px;
+  color: #c9d6ea;
+  font-size: 0.78rem;
+}
+
+.saved-constellations__field output {
+  color: #94aed6;
+  font-variant-numeric: tabular-nums;
+}
+
+.saved-constellations__field input[type="range"] {
+  width: 100%;
+  accent-color: #94aed6;
+}
+
+.saved-constellations__field input:not([type="range"]),
+.saved-constellations__field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgba(148, 174, 214, 0.35);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(4, 12, 24, 0.72);
+  color: #f4f7ff;
+  font: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+
+.saved-constellations__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.saved-constellations__primary,
+.saved-constellations__quiet {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saved-constellations__primary {
+  flex: 1;
+  background: #94aed6;
+  color: #09142f;
+}
+
+.saved-constellations__primary:hover:not(:disabled) {
+  background: #b7c8e4;
+}
+
+.saved-constellations__quiet {
+  background: rgba(148, 174, 214, 0.16);
+  color: #d7e3f4;
+}
+
+.saved-constellations__quiet:hover:not(:disabled) {
+  background: rgba(148, 174, 214, 0.28);
+}
+
+.saved-constellations button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.polaroid-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 88px 28px 28px 20px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.polaroid-stack {
+  display: grid;
+  justify-items: center;
+  max-width: min(340px, 36vw);
+  pointer-events: auto;
+}
+
+.polaroid {
+  display: flex;
+  flex-direction: column;
+  width: min(312px, 34vw);
+  height: auto;
+  margin: 0;
+  padding: 10px 10px 12px;
+  border: 1px solid rgba(148, 174, 214, 0.28);
+  border-radius: 18px;
+  background: rgba(7, 13, 30, 0.9);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
+}
+
+.polaroid img,
+.polaroid__blank {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(22vh, 160px);
+  object-fit: contain;
+  object-position: center;
+  background: rgba(4, 8, 20, 0.72);
+  border-radius: 12px;
+}
+
+.polaroid__blank {
+  aspect-ratio: 1;
+}
+
+.polaroid figcaption {
+  display: grid;
+  gap: 8px;
+  padding: 8px 8px 2px;
+}
+
+.polaroid__title {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin: 0;
+  width: 100%;
+  min-height: 28px;
+  max-height: 44px;
+  color: #f4f7ff;
+  font-family: "Caveat", "Segoe Script", "Comic Sans MS", cursive;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.polaroid__note {
+  margin: 0;
+  color: #d5def4;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.polaroid__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 174, 214, 0.18);
+}
+
+.polaroid__meta div {
+  display: grid;
+  gap: 2px;
+}
+
+.polaroid__meta dt {
+  color: #94aed6;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.polaroid__meta dd {
+  margin: 0;
+  color: #d5def4;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.polaroid__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.polaroid__close,
+.polaroid__delete {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.polaroid__close {
+  color: #94aed6;
+}
+
+.polaroid__close:hover {
+  color: #d7e3f4;
+}
+
+.polaroid__delete {
+  color: #c9b4c8;
+}
+
+.polaroid__delete:hover {
+  color: #f4f7ff;
+}
+
+@media (max-width: 720px) {
+  .saved-constellations {
+    width: min(260px, calc(100vw - 196px));
+  }
+}
