@@ -10,7 +10,6 @@ import {
   updateConstellationLayer,
 } from "../constellations/aladinLayer";
 import { outlineRings } from "../constellations/mapToStars";
-import { skyCentroid } from "../constellations/overlap";
 import { slideMapped } from "../constellations/placeInSky";
 import { inspectableBodies } from "../data/celestialBodies";
 import hipparcosBright from "../data/hipparcosBright.json";
@@ -249,6 +248,35 @@ function grabLayout(aladin, mapped) {
   };
 }
 
+function starHandlesFor(aladin, mapped, owner) {
+  if (!aladin || !mapped?.vertices) return [];
+  const handles = [];
+  for (const vertex of mapped.vertices) {
+    if (!vertex.star) continue;
+    const pixel = aladin.world2pix(vertex.star.ra, vertex.star.dec);
+    if (!pixel || !Number.isFinite(pixel[0]) || !Number.isFinite(pixel[1])) continue;
+    handles.push({
+      key: `${owner}:${vertex.id}`,
+      owner,
+      vertexId: vertex.id,
+      x: pixel[0],
+      y: pixel[1],
+    });
+  }
+  return handles;
+}
+
+function previewMove(mapped, vertexId, sky) {
+  return {
+    ...mapped,
+    vertices: mapped.vertices.map((vertex) => (
+      vertex.id === vertexId && vertex.star
+        ? { ...vertex, star: { ...vertex.star, ra: sky.ra, dec: sky.dec } }
+        : vertex
+    )),
+  };
+}
+
 const ALADIN_CHROME = [
   ".aladin-location",
   ".aladin-reticle",
@@ -343,8 +371,8 @@ function hideAladinChrome(root) {
  * `draft` is a just-placed constellation (not saved yet);
  * `saved` are the stored constellations that belong to the current place and day.
  * Both are drawn from their RA/Dec stars, so nothing here runs a model. Clicking a
- * saved constellation or its photo calls `onSelect(id)`; clicking empty sky calls
- * `onSkyClick` with that RA/Dec so the draft can be moved.
+ * saved constellation calls `onSelect(id)`; dragging empty space inside a draft
+ * slides the whole figure (`onMove`). Dragging one star calls `onEditVertex`.
  */
 export default function AladinStarMap({
   latitude,
@@ -361,6 +389,7 @@ export default function AladinStarMap({
   onCloseObject,
   onSkyClick,
   onMove,
+  onEditVertex,
   recenterRequest = 0,
 }) {
   const viewRef = useRef(null);
@@ -373,6 +402,7 @@ export default function AladinStarMap({
   const onSelectObjectRef = useRef(onSelectObject);
   const onSkyClickRef = useRef(onSkyClick);
   const onMoveRef = useRef(onMove);
+  const onEditVertexRef = useRef(onEditVertex);
   const savedRef = useRef(saved);
   const draftRef = useRef(draft);
   const placingRef = useRef(placing);
@@ -385,6 +415,7 @@ export default function AladinStarMap({
   const [mapReady, setMapReady] = useState(false);
   const [handle, setHandle] = useState(null);
   const [outlines, setOutlines] = useState([]);
+  const [starHandles, setStarHandles] = useState([]);
   const [objectPin, setObjectPin] = useState(null);
   const [initError, setInitError] = useState(null);
 
@@ -392,6 +423,7 @@ export default function AladinStarMap({
   onSelectObjectRef.current = onSelectObject;
   onSkyClickRef.current = onSkyClick;
   onMoveRef.current = onMove;
+  onEditVertexRef.current = onEditVertex;
   savedRef.current = saved;
   draftRef.current = draft;
   placingRef.current = placing;
@@ -432,9 +464,91 @@ export default function AladinStarMap({
   const syncPins = () => {
     const aladin = aladinRef.current;
     if (!aladin) return;
-    setHandle(grabLayout(aladin, draftRef.current));
-    setOutlines(collectOutlinePaths(aladin, draftRef.current, savedRef.current));
+    const currentDraft = placingRef.current ? draftRef.current : null;
+    setHandle(grabLayout(aladin, currentDraft));
+    setOutlines(collectOutlinePaths(aladin, currentDraft, savedRef.current));
+    const handles = currentDraft ? starHandlesFor(aladin, currentDraft, "draft") : [];
+    for (const record of savedRef.current) {
+      handles.push(...starHandlesFor(aladin, record, record.id));
+    }
+    setStarHandles(handles);
     syncObjectPin();
+  };
+
+  const layerFor = (owner) => {
+    if (owner === "draft") return draftLayerRef.current;
+    const index = savedRef.current.findIndex((record) => record.id === owner);
+    return index >= 0 ? layersRef.current[index] ?? null : null;
+  };
+
+  const startStarDrag = (owner, vertexId) => (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const view = viewRef.current;
+    const aladin = aladinRef.current;
+    if (!view || !aladin) return;
+    const source = owner === "draft"
+      ? draftRef.current
+      : savedRef.current.find((record) => record.id === owner);
+    if (!source?.vertices) return;
+    const box = view.getBoundingClientRect();
+    const start = { x: event.clientX, y: event.clientY };
+    let frame = 0;
+    let previewing = false;
+    const drag = (moveEvent) => {
+      if (Math.hypot(moveEvent.clientX - start.x, moveEvent.clientY - start.y) < 4) return;
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const sky = skyFromPix(aladin, moveEvent.clientX - box.left, moveEvent.clientY - box.top);
+        if (!sky) return;
+        previewing = true;
+        const latest = previewMove(source, vertexId, sky);
+        const layer = layerFor(owner);
+        if (layer) updateConstellationLayer(aladin, layer, latest);
+        if (owner === "draft") draftRef.current = latest;
+        const pixel = aladin.world2pix(sky.ra, sky.dec);
+        if (owner === "draft") {
+          syncPins();
+        } else if (pixel && Number.isFinite(pixel[0]) && Number.isFinite(pixel[1])) {
+          setStarHandles((current) => current.map((handle) => (
+            handle.owner === owner && handle.vertexId === vertexId
+              ? { ...handle, x: pixel[0], y: pixel[1] }
+              : handle
+          )));
+        }
+      });
+    };
+    const stop = (upEvent) => {
+      window.removeEventListener("pointermove", drag);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      window.cancelAnimationFrame(frame);
+      const moved = Math.hypot(upEvent.clientX - start.x, upEvent.clientY - start.y);
+      if (moved < 6) {
+        if (previewing) {
+          const layer = layerFor(owner);
+          if (layer) updateConstellationLayer(aladin, layer, source);
+          if (owner === "draft") draftRef.current = source;
+          syncPins();
+        }
+        const vertex = source.vertices.find((item) => item.id === vertexId);
+        if (vertex?.star) onSelectObjectRef.current?.(vertex.star);
+        return;
+      }
+      const sky = skyFromPix(aladin, upEvent.clientX - box.left, upEvent.clientY - box.top);
+      if (sky) {
+        onEditVertexRef.current?.(owner, vertexId, sky);
+        return;
+      }
+      const layer = layerFor(owner);
+      if (layer) updateConstellationLayer(aladin, layer, source);
+      if (owner === "draft") draftRef.current = source;
+      syncPins();
+    };
+    window.addEventListener("pointermove", drag);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   };
 
   const recenterToLocalSky = () => {
@@ -493,7 +607,7 @@ export default function AladinStarMap({
         }
         draftLayerRef.current = null;
       }
-      setHandle(null);
+      syncPins();
       return undefined;
     }
 
@@ -747,10 +861,10 @@ export default function AladinStarMap({
   return (
     <div className={`aladin-star-map${placing ? " aladin-star-map--placing" : ""}${layers.sky ? " aladin-star-map--telescope" : ""}`} data-layer="starmap">
       <div ref={viewRef} className="aladin-star-map__view" />
-      <div className="aladin-star-map__pins" aria-hidden={!handle && !outlines.length}>
+      <div className="aladin-star-map__pins" aria-hidden={!handle && !outlines.length && !starHandles.length}>
         {layers.outlines && outlines.length ? (
           <svg className="aladin-star-map__outline" aria-hidden="true">
-            {outlines.map((outline) => (
+            {outlines.filter((outline) => placing || !outline.id.startsWith("draft-")).map((outline) => (
               outline.closed
                 ? <polygon key={outline.id} points={outline.points} />
                 : <polyline key={outline.id} points={outline.points} fill="none" />
@@ -803,18 +917,20 @@ export default function AladinStarMap({
                 if (!latest) return;
                 const moved = Math.hypot(upEvent.clientX - start.x, upEvent.clientY - start.y);
                 if (moved < 6) {
+                  if (draftLayerRef.current) {
+                    draftLayerRef.current = updateConstellationLayer(aladin, draftLayerRef.current, latest.mapped);
+                  }
+                  draftRef.current = latest.mapped;
+                  syncPins();
                   const xy = { x: upEvent.clientX - box.left, y: upEvent.clientY - box.top };
                   const figures = [draftRef.current, ...savedRef.current];
                   const starHit = constellationStarAt(aladin, figures, xy.x, xy.y);
-                  if (starHit) {
-                    onSelectObjectRef.current?.(starHit.star);
-                    return;
-                  }
+                  if (starHit) onSelectObjectRef.current?.(starHit.star);
+                  return;
                 }
                 const sky = skyFromPix(aladin, upEvent.clientX - box.left, upEvent.clientY - box.top);
                 const slid = sky ? slideMapped(latest.mapped, latest.origin, sky) : draftRef.current;
-                const center = slid ? skyCentroid(slid) : null;
-                if (center) onMoveRef.current?.(center);
+                if (slid) onMoveRef.current?.(slid);
               };
               window.addEventListener("pointermove", drag);
               window.addEventListener("pointerup", stop);
@@ -824,6 +940,15 @@ export default function AladinStarMap({
             <span className="aladin-star-map__handle" aria-hidden="true" />
           </div>
         ) : null}
+        {starHandles.filter((star) => placing || star.owner !== "draft").map((star) => (
+          <div
+            key={star.key}
+            className="aladin-star-map__star"
+            title="Drag to move this star"
+            style={{ left: star.x, top: star.y }}
+            onPointerDown={startStarDrag(star.owner, star.vertexId)}
+          />
+        ))}
       </div>
       {skyObject && objectPin ? (
         <SkyObjectCard object={skyObject} anchor={objectPin} onClose={onCloseObject} />

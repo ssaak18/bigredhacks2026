@@ -35,6 +35,23 @@ function drawingLayout(drawing, { spanDeg = 12, xToward = "west" } = {}) {
   };
 }
 
+/** Shifts one drawing point by the same angle the star moved, so a later re-place keeps it. */
+export function shiftDrawingPoint(drawing, pointId, fromSky, toSky, center, spanDeg) {
+  if (!drawing?.points || !fromSky || !toSky || !center) return drawing;
+  const layout = drawingLayout(drawing, { spanDeg });
+  const from = localOffsetsFromRaDec(center, fromSky);
+  const to = localOffsetsFromRaDec(center, toSky);
+  const dx = -(to.eastDeg - from.eastDeg) / (layout.scale * layout.xSign || 1);
+  const dy = (to.northDeg - from.northDeg) / layout.scale;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return drawing;
+  return {
+    ...drawing,
+    points: drawing.points.map((point) => (
+      point.id === pointId ? { ...point, x: point.x + dx, y: point.y + dy } : point
+    )),
+  };
+}
+
 function projectPoint(point, center, layout) {
   const westDeg = (point.x - layout.cx) * layout.scale * layout.xSign;
   const northDeg = (point.y - layout.cy) * layout.scale;

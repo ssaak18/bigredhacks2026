@@ -62,6 +62,7 @@ export const PLACES = [
   { name: "Hong Kong", region: "China", latitude: 22.3193, longitude: 114.1694 },
   { name: "Beijing", region: "China", latitude: 39.9042, longitude: 116.4074 },
   { name: "Shanghai", region: "China", latitude: 31.2304, longitude: 121.4737 },
+  { name: "Taipei", region: "Taiwan", latitude: 25.033, longitude: 121.5654 },
   { name: "Seoul", region: "South Korea", latitude: 37.5665, longitude: 126.978 },
   { name: "Tokyo", region: "Japan", latitude: 35.6762, longitude: 139.6503 },
   { name: "Sydney", region: "Australia", latitude: -33.8688, longitude: 151.2093 },

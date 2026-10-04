@@ -70,6 +70,7 @@ function SaveDraft({ draft, onSave, onDiscard, onResize }) {
           onChange={(event) => setNote(event.target.value)}
         />
       </label>
+      <p className="saved-constellations__note">Drag a star to move it, or drag the figure to slide it.</p>
       {!savable ? (
         <p className="saved-constellations__error">Too few objects were matched overhead to save this one.</p>
       ) : null}
@@ -119,6 +120,7 @@ function Polaroid({ record, onClose, onDelete }) {
           <figcaption>
             <FitTitle text={record.name || record.label || "Untitled"} />
             {record.note ? <p className="polaroid__note">{record.note}</p> : null}
+            <p className="polaroid__hint">Drag a star on the sky to move it.</p>
             <dl className="polaroid__meta">
               <div>
                 <dt>Where</dt>

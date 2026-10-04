@@ -1,5 +1,5 @@
-import { fromVec, toVec } from "../astro/localSky.js";
-import { skyBodiesAt } from "../data/celestialBodies";
+import { angularDistanceDeg, fromVec, toVec } from "../astro/localSky.js";
+import { factFor, skyBodiesAt } from "../data/celestialBodies";
 import hipparcosBright from "../data/hipparcosBright.json";
 import { zenithEquatorial } from "../sky/localSky";
 import { mapEuclideanConstellation } from "./mapToStars";
@@ -84,5 +84,61 @@ export function slideMapped(mapped, from, to) {
     }),
     outlines,
     outline: outlines[0] ?? [],
+  };
+}
+
+/** A drop this close to a visible catalog star adopts that star. */
+const ADOPT_DEG = 1.4;
+const VISIBLE_MAG = 5.6;
+
+/**
+ * Moves one vertex to `sky`. Snaps onto a nearby unused bright star when one is
+ * close; otherwise the vertex stays where it was dropped.
+ */
+export function relocateVertex(mapped, vertexId, sky) {
+  if (!mapped?.vertices || !sky) return mapped;
+  const vertex = mapped.vertices.find((item) => item.id === vertexId && item.star);
+  if (!vertex) return mapped;
+  const used = new Set();
+  for (const other of mapped.vertices) {
+    if (other.id === vertexId || other.star?.hip == null) continue;
+    used.add(other.star.hip);
+  }
+  let best = null;
+  let bestDistance = ADOPT_DEG;
+  for (const star of hipparcosBright) {
+    if (!(star.vmag <= VISIBLE_MAG) || used.has(star.hip)) continue;
+    const distance = angularDistanceDeg(sky, star);
+    if (distance < bestDistance) {
+      best = star;
+      bestDistance = distance;
+    }
+  }
+  const star = best
+    ? {
+      id: `hip-${best.hip}`,
+      hip: best.hip,
+      name: best.name ?? null,
+      kind: "star",
+      ra: best.ra,
+      dec: best.dec,
+      vmag: best.vmag,
+      fact: factFor({ ...best, kind: "star" }),
+    }
+    : {
+      id: `placed-${vertexId}`,
+      hip: null,
+      name: null,
+      kind: "star",
+      ra: sky.ra,
+      dec: sky.dec,
+      vmag: vertex.star.vmag ?? null,
+      fact: null,
+    };
+  return {
+    ...mapped,
+    vertices: mapped.vertices.map((item) => (
+      item.id === vertexId ? { ...item, snapDistanceDeg: best ? bestDistance : null, star } : item
+    )),
   };
 }

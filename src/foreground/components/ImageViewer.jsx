@@ -75,10 +75,10 @@ export default function ImageViewer({
         </p>
       )}
       {analysis?.warning && <p className="image-stage-note">{analysis.warning}</p>}
-      {debug && constellation && !choosing && (
+      {constellation && !choosing && (
         <p className="image-stage-note">
           Drag any star to move it.
-          {onResetPoints && <button className="quiet-button" type="button" onClick={onResetPoints}>Reset stars</button>}
+          {onResetPoints ? <button className="quiet-button" type="button" onClick={onResetPoints}>Reset stars</button> : null}
         </p>
       )}
       <div className="analysis-controls">

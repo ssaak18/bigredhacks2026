@@ -6,8 +6,8 @@ const clamp01 = (value) => Math.min(1, Math.max(0, value));
 /**
  * Draws a constellation over its photo. The viewBox has the photo's aspect
  * ratio (height 1), so stars stay round at any size. In debug mode the subject
- * outline, every candidate that was not selected, and part names are shown, and
- * stars can be dragged (`onMovePoint(id, { x, y })`, both as fractions of the photo).
+ * outline, every candidate that was not selected, and part names are shown.
+ * Stars can be dragged whenever `onMovePoint` is set (`id`, `{ x, y }` as fractions of the photo).
  */
 export default function ConstellationOverlay({ constellation, analysis, edges, debug, onMovePoint }) {
   const { aspect, points, lines } = constellation;
@@ -15,7 +15,7 @@ export default function ConstellationOverlay({ constellation, analysis, edges, d
   const byId = new Map(points.map((point) => [point.id, point]));
   const toView = (point) => ({ x: point.x * aspect, y: point.y });
   const fromGrid = (point) => ({ x: (point.x / analysis.width) * aspect, y: point.y / analysis.height });
-  const draggable = debug && Boolean(onMovePoint);
+  const draggable = Boolean(onMovePoint);
 
   // Follows the pointer on the window until release, so a fast drag cannot slip off the star.
   const startDrag = (id) => (event) => {

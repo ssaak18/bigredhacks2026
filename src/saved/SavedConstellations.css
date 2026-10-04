@@ -202,6 +202,13 @@
   line-height: 1.4;
 }
 
+.polaroid__hint {
+  margin: 0;
+  color: #9cadd2;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .polaroid__meta {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import SkyBackground from "./background/SkyBackground";
-import { placeInSky, SKY_SPAN } from "./constellations/placeInSky";
+import { shiftDrawingPoint } from "./constellations/mapToStars";
+import { skyCentroid } from "./constellations/overlap";
+import { placeInSky, relocateVertex, SKY_SPAN } from "./constellations/placeInSky";
 import {
   buildSavedRecord,
   isAtSky,
@@ -27,7 +29,6 @@ export default function App() {
   const [draft, setDraft] = useState(null);
   const draftRef = useRef(null);
   const draftCount = useRef(0);
-  const moveFrame = useRef(0);
   draftRef.current = draft;
   const [saved, setSaved] = useState(loadSaved);
   const [selectedId, setSelectedId] = useState(null);
@@ -73,24 +74,15 @@ export default function App() {
     setSelectedId(null);
   };
 
-  const applyPlacement = (attempt) => {
+  const moveDraft = (mapped) => {
     const current = draftRef.current;
-    if (!current) return;
-    setDraft({ ...current, mapped: attempt.mapped, center: attempt.center });
-  };
-
-  const moveDraft = (center) => {
-    const current = draftRef.current;
-    if (!current?.drawing) return;
-    window.cancelAnimationFrame(moveFrame.current);
-    moveFrame.current = window.requestAnimationFrame(() => {
-      const latest = draftRef.current;
-      if (!latest?.drawing) return;
-      applyPlacement(placeInSky(latest.drawing, latest.place, latest.time, {
-        center,
-        spanDeg: latest.spanDeg,
-      }));
+    if (!current?.drawing || !mapped) return;
+    const center = skyCentroid(mapped) ?? current.center;
+    const attempt = placeInSky(current.drawing, current.place, current.time, {
+      center,
+      spanDeg: current.spanDeg,
     });
+    setDraft({ ...current, mapped: attempt.mapped, center: attempt.center });
   };
 
   const resizeDraft = (spanDeg) => {
@@ -101,6 +93,26 @@ export default function App() {
       spanDeg,
     });
     setDraft({ ...current, mapped: attempt.mapped, center: attempt.center, spanDeg });
+  };
+
+  const editVertex = (owner, vertexId, sky) => {
+    if (owner === "draft") {
+      const current = draftRef.current;
+      if (!current?.mapped) return;
+      const before = current.mapped.vertices.find((vertex) => vertex.id === vertexId)?.star;
+      const mapped = relocateVertex(current.mapped, vertexId, sky);
+      const after = mapped.vertices.find((vertex) => vertex.id === vertexId)?.star;
+      const drawing = shiftDrawingPoint(current.drawing, vertexId, before, after, current.center, current.spanDeg);
+      setDraft({ ...current, mapped, drawing });
+      return;
+    }
+    setSaved((previous) => {
+      const next = previous.map((record) => (
+        record.id === owner ? relocateVertex(record, vertexId, sky) : record
+      ));
+      persistSaved(next);
+      return next;
+    });
   };
 
   const saveDraft = async (name, note) => {
@@ -155,6 +167,7 @@ export default function App() {
         }}
         onCloseObject={() => setSkyObject(null)}
         onMove={moveDraft}
+        onEditVertex={editVertex}
         onSkyClick={() => {
           if (!draft) {
             setSelectedId(null);
@@ -168,6 +181,7 @@ export default function App() {
         compact={Boolean(draft) && !showWorkspace}
         hidden={!draft && !showWorkspace}
         onExpand={() => setShowWorkspace(true)}
+        onImageCleared={() => setDraft(null)}
       />
       <SavedConstellations
         draft={draft}

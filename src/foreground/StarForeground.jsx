@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ImageUploader from "./components/ImageUploader";
 import ImageViewer from "./components/ImageViewer";
 import { analyzePhoto, disposeVisionWorker } from "./vision/client";
@@ -14,7 +14,7 @@ import "./StarForeground.css";
  * result to the parent as a Euclidean drawing, plus the source photo and its
  * label, and otherwise knows nothing of the map.
  */
-export default function StarForeground({ onConstellation, compact = false, hidden = false, onExpand }) {
+export default function StarForeground({ onConstellation, compact = false, hidden = false, onExpand, onImageCleared }) {
   const [file, setFile] = useState(null);
   const [imageUrl, setImageUrl] = useState("");
   const [imageReady, setImageReady] = useState(false);
@@ -41,7 +41,8 @@ export default function StarForeground({ onConstellation, compact = false, hidde
     return [analysis.outline, ...(analysis.features ?? [])].filter((chain) => chain?.length);
   }, [analysis, edgeThreshold]);
 
-  // Hand-moved stars (debug mode) belong to one generated constellation and are dropped with it.
+  // Hand-moved stars belong to one generated constellation and are dropped when it is rebuilt.
+  const analysisRequest = useRef(0);
   const [edits, setEdits] = useState({ base: null, moved: {} });
   const moved = edits.base === generated ? edits.moved : null;
   const constellation = useMemo(
@@ -63,39 +64,53 @@ export default function StarForeground({ onConstellation, compact = false, hidde
   useEffect(() => () => disposeVisionWorker(), []);
 
   const clearImage = () => {
+    analysisRequest.current += 1;
     setFile(null);
     setImageUrl("");
     setAnalysis(null);
+    setEdits({ base: null, moved: {} });
     setProgress("");
     setError("");
     setImageReady(false);
     setChoosing(false);
+    setIsProcessing(false);
+    onImageCleared?.();
   };
 
   const handleImageSelected = ({ file: nextFile, error: nextError }) => {
+    analysisRequest.current += 1;
     setError(nextError || "");
     if (!nextFile) return;
     setFile(nextFile);
     setImageUrl(URL.createObjectURL(nextFile));
     setAnalysis(null);
+    setEdits({ base: null, moved: {} });
     setProgress("");
     setImageReady(false);
     setChoosing(false);
+    setIsProcessing(false);
   };
 
   // With a `point` the subject is whatever the user tapped; otherwise it is found automatically.
   const analyze = async (point) => {
+    const request = analysisRequest.current + 1;
+    analysisRequest.current = request;
     setIsProcessing(true);
     setChoosing(false);
     setError("");
     setAnalysis(null);
     try {
-      setAnalysis(await analyzePhoto(file, { photoKey: imageUrl, point }, setProgress));
+      const result = await analyzePhoto(file, { photoKey: imageUrl, point }, setProgress);
+      if (request !== analysisRequest.current) return;
+      setAnalysis(result);
     } catch (reason) {
+      if (request !== analysisRequest.current) return;
       setError(reason instanceof Error ? reason.message : "The image could not be processed.");
     } finally {
-      setProgress("");
-      setIsProcessing(false);
+      if (request === analysisRequest.current) {
+        setProgress("");
+        setIsProcessing(false);
+      }
     }
   };
 

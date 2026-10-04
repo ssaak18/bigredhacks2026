@@ -104,9 +104,29 @@
 
 .aladin-star-map__grab {
   position: absolute;
+  z-index: 1;
   pointer-events: auto;
   cursor: grab;
   touch-action: none;
+}
+
+.aladin-star-map__star {
+  position: absolute;
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.aladin-star-map__star:hover,
+.aladin-star-map__star:active {
+  background: rgba(245, 249, 255, 0.28);
+  box-shadow: 0 0 0 2px rgba(148, 174, 214, 0.85);
+  cursor: grabbing;
 }
 
 .aladin-star-map__grab:active {
