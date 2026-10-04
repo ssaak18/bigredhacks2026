@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SKY_SPAN } from "../constellations/placeInSky";
 import { displayName } from "../data/celestialBodies";
 import { formatCoordinates, formatLocalClock, timeZoneAt } from "../sky/localSky";
 import "./SavedConstellations.css";
@@ -20,7 +21,7 @@ function FitTitle({ text }) {
   return <p ref={ref} className="polaroid__title">{text}</p>;
 }
 
-function SaveDraft({ draft, onSave, onDiscard }) {
+function SaveDraft({ draft, onSave, onDiscard, onResize }) {
   const [name, setName] = useState(draft.mapped.name);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,6 +49,16 @@ function SaveDraft({ draft, onSave, onDiscard }) {
       <label className="saved-constellations__field">
         <span>Name</span>
         <input value={name} maxLength={48} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <label className="saved-constellations__field">
+        <span>Size <output>{draft.spanDeg ?? SKY_SPAN.default}°</output></span>
+        <input
+          type="range"
+          min={SKY_SPAN.min}
+          max={SKY_SPAN.max}
+          value={draft.spanDeg ?? SKY_SPAN.default}
+          onChange={(event) => onResize?.(Number(event.target.value))}
+        />
       </label>
       <label className="saved-constellations__field">
         <span>Note</span>
@@ -97,12 +108,8 @@ function Polaroid({ record, onClose, onDelete }) {
   const meta = constellationMeta(record);
 
   return (
-    <div
-      className="polaroid-overlay"
-      role="presentation"
-      onClick={onClose}
-    >
-      <div className="polaroid-stack" onClick={(event) => event.stopPropagation()}>
+    <div className="polaroid-overlay">
+      <div className="polaroid-stack">
         <figure className="polaroid" role="dialog" aria-label={record.name}>
           {record.image ? (
             <img src={record.image} alt="" />
@@ -111,6 +118,7 @@ function Polaroid({ record, onClose, onDelete }) {
           )}
           <figcaption>
             <FitTitle text={record.name || record.label || "Untitled"} />
+            {record.note ? <p className="polaroid__note">{record.note}</p> : null}
             <dl className="polaroid__meta">
               <div>
                 <dt>Where</dt>
@@ -129,13 +137,18 @@ function Polaroid({ record, onClose, onDelete }) {
                 <dd>{meta.brightest}</dd>
               </div>
             </dl>
-            <button
-              type="button"
-              className="polaroid__delete"
-              onClick={() => onDelete(record.id)}
-            >
-              Delete
-            </button>
+            <div className="polaroid__actions">
+              <button type="button" className="polaroid__close" onClick={onClose}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="polaroid__delete"
+                onClick={() => onDelete(record.id)}
+              >
+                Delete
+              </button>
+            </div>
           </figcaption>
         </figure>
       </div>
@@ -149,7 +162,7 @@ function Polaroid({ record, onClose, onDelete }) {
  * original photo and metadata.
  */
 export default function SavedConstellations({
-  draft, selected, onSelect, onSave, onDiscard, onDelete,
+  draft, selected, onSelect, onSave, onDiscard, onDelete, onResize,
 }) {
   useEffect(() => {
     if (!selected) return undefined;
@@ -167,7 +180,7 @@ export default function SavedConstellations({
       className={selected ? "saved-constellations saved-constellations--inspect" : "saved-constellations"}
       data-layer="saved"
     >
-      {draft ? <SaveDraft key={draft.id} draft={draft} onSave={onSave} onDiscard={onDiscard} /> : null}
+      {draft ? <SaveDraft key={draft.id} draft={draft} onSave={onSave} onDiscard={onDiscard} onResize={onResize} /> : null}
       {selected ? (
         <Polaroid record={selected} onClose={() => onSelect(null)} onDelete={onDelete} />
       ) : null}

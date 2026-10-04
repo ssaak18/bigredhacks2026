@@ -19,9 +19,9 @@ export const SAM_MODEL = { id: "Xenova/slimsam-77-uniform", dtype: "q8" };
 /** Longest side (px) of the image handed to the models. */
 export const INFERENCE_SIZE = 896;
 /** Longest side (px) of the grid all geometry (mask, contour, corners) is computed on. */
-export const GRID_SIZE = 384;
+export const GRID_SIZE = 512;
 
-export const POINT_COUNT = { min: 5, default: 18, max: 40 };
+export const POINT_COUNT = { min: 5, default: 28, max: 96 };
 
 /**
  * ADE20K labels worth treating as a photo's subject. Anything else (wall, sky,

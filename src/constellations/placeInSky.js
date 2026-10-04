@@ -4,26 +4,27 @@ import hipparcosBright from "../data/hipparcosBright.json";
 import { zenithEquatorial } from "../sky/localSky";
 import { mapEuclideanConstellation } from "./mapToStars";
 
-const SPAN_DEG = 36;
+/** Angular size of a placed constellation, in degrees across its longer side. */
+export const SKY_SPAN = { min: 5, default: 12, max: 30 };
 
 /**
  * Lays a Euclidean drawing out on the sky around `center` (the zenith when omitted)
  * and snaps it to stars. Returns the mapped constellation and where it was centred.
  */
-export function placeInSky(drawing, place, time, { center } = {}) {
+export function placeInSky(drawing, place, time, { center, spanDeg = SKY_SPAN.default } = {}) {
   const date = new Date(time);
   const zenith = zenithEquatorial(place.latitude, place.longitude, date);
   const aim = center ?? zenith;
   const mapped = mapEuclideanConstellation(drawing, skyBodiesAt(date, hipparcosBright), zenith, {
-    spanDeg: SPAN_DEG,
+    spanDeg,
     center: aim,
   });
   return { mapped, center: aim };
 }
 
 /** Places at the zenith. Click and drag afterward to move it. */
-export function autoPlaceInSky(drawing, place, time) {
-  return placeInSky(drawing, place, time);
+export function autoPlaceInSky(drawing, place, time, options = {}) {
+  return placeInSky(drawing, place, time, options);
 }
 
 function cross(a, b) {
@@ -66,6 +67,14 @@ export function slideMapped(mapped, from, to) {
     const angle = Math.atan2(length, cosine);
     rotate = (point) => fromVec(rodrigues(toVec(point.ra, point.dec), unit, angle));
   }
+  const outlines = (mapped.outlines ?? (mapped.outline ? [mapped.outline] : [])).map((ring) => {
+    const next = ring.map((point) => {
+      const sky = rotate(point);
+      return { ...point, ra: sky.ra, dec: sky.dec };
+    });
+    next.closed = ring.closed !== false;
+    return next;
+  });
   return {
     ...mapped,
     vertices: mapped.vertices.map((vertex) => {
@@ -73,5 +82,7 @@ export function slideMapped(mapped, from, to) {
       const next = rotate(vertex.star);
       return { ...vertex, star: { ...vertex.star, ra: next.ra, dec: next.dec } };
     }),
+    outlines,
+    outline: outlines[0] ?? [],
   };
 }

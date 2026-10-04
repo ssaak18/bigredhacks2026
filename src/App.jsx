@@ -1,19 +1,20 @@
 import { useMemo, useRef, useState } from "react";
 import SkyBackground from "./background/SkyBackground";
-import { autoPlaceInSky, placeInSky } from "./constellations/placeInSky";
+import { placeInSky, SKY_SPAN } from "./constellations/placeInSky";
 import {
   buildSavedRecord,
   isAtSky,
   loadSaved,
   persistSaved,
   photoToDataUrl,
+  recordHasStar,
 } from "./constellations/saved";
 import StarForeground from "./foreground/StarForeground";
 import LocationGlobe from "./globe/LocationGlobe";
 import { ITHACA } from "./globe/places";
 import AladinStarMap from "./map/AladinStarMap";
+import LayerPanel from "./map/LayerPanel";
 import RecenterButton from "./map/RecenterButton";
-import TelescopeToggle from "./map/TelescopeToggle";
 import SavedConstellations from "./saved/SavedConstellations";
 import TimeArc from "./timeline/TimeArc";
 import "./App.css";
@@ -31,7 +32,12 @@ export default function App() {
   const [saved, setSaved] = useState(loadSaved);
   const [selectedId, setSelectedId] = useState(null);
   const [skyObject, setSkyObject] = useState(null);
-  const [telescope, setTelescope] = useState(true);
+  const [layers, setLayers] = useState({
+    sky: false,
+    stars: true,
+    constellations: true,
+    outlines: true,
+  });
   const [recenterRequest, setRecenterRequest] = useState(0);
 
   // Visible for the current place on this local calendar day. The key stays
@@ -48,14 +54,16 @@ export default function App() {
 
   const placeDraft = (drawing, source, center) => {
     draftCount.current += 1;
+    const spanDeg = source.spanDeg ?? SKY_SPAN.default;
     const attempt = center
-      ? placeInSky(drawing, place, time, { center })
-      : autoPlaceInSky(drawing, place, time);
+      ? placeInSky(drawing, place, time, { center, spanDeg })
+      : placeInSky(drawing, place, time, { spanDeg });
     setDraft({
       id: draftCount.current,
       drawing,
       mapped: attempt.mapped,
       center: attempt.center,
+      spanDeg,
       place,
       time,
       file: source.file,
@@ -78,8 +86,21 @@ export default function App() {
     moveFrame.current = window.requestAnimationFrame(() => {
       const latest = draftRef.current;
       if (!latest?.drawing) return;
-      applyPlacement(placeInSky(latest.drawing, latest.place, latest.time, { center }));
+      applyPlacement(placeInSky(latest.drawing, latest.place, latest.time, {
+        center,
+        spanDeg: latest.spanDeg,
+      }));
     });
+  };
+
+  const resizeDraft = (spanDeg) => {
+    const current = draftRef.current;
+    if (!current?.drawing) return;
+    const attempt = placeInSky(current.drawing, current.place, current.time, {
+      center: current.center,
+      spanDeg,
+    });
+    setDraft({ ...current, mapped: attempt.mapped, center: attempt.center, spanDeg });
   };
 
   const saveDraft = async (name, note) => {
@@ -121,7 +142,7 @@ export default function App() {
         placing={Boolean(draft)}
         saved={visible}
         selectedId={selected?.id ?? null}
-        telescope={telescope}
+        layers={layers}
         skyObject={skyObject}
         onSelect={(id) => {
           setSelectedId(id);
@@ -129,7 +150,8 @@ export default function App() {
         }}
         onSelectObject={(body) => {
           setSkyObject(body);
-          setSelectedId(null);
+          const host = visible.find((record) => recordHasStar(record, body));
+          setSelectedId(host ? host.id : null);
         }}
         onCloseObject={() => setSkyObject(null)}
         onMove={moveDraft}
@@ -152,6 +174,7 @@ export default function App() {
         selected={selected}
         onSelect={setSelectedId}
         onSave={saveDraft}
+        onResize={resizeDraft}
         onDiscard={() => {
           setDraft(null);
           setShowWorkspace(true);
@@ -159,7 +182,7 @@ export default function App() {
         onDelete={deleteSaved}
       />
       <RecenterButton onClick={() => setRecenterRequest((current) => current + 1)} />
-      <TelescopeToggle on={telescope} onToggle={() => setTelescope((current) => !current)} />
+      <LayerPanel layers={layers} onChange={setLayers} />
       <LocationGlobe place={place} time={time} onSelect={setPlace} />
       <TimeArc
         time={time}

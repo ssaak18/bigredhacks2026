@@ -1,20 +1,24 @@
 import {
   angularDistanceDeg,
+  localOffsetsFromRaDec,
   raDecFromLocalOffsets,
 } from "../astro/localSky.js";
 import { catalogId } from "../data/celestialBodies";
 
 const MAX_SNAP_DEG = 8;
-const NAMED_ASSIGN_DEG = 3;
-const NAMED_SLACK_DEG = 1.8;
-const BRIGHT_SLACK_DEG = 0.7;
-const WELL_KNOWN_MAG = 6.5;
 
-export function projectEuclideanToSky(
-  drawing,
-  zenith,
-  { spanDeg = 36, xToward = "west" } = {},
-) {
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+/** Snap radius shrinks with the constellation so a small figure stays tight. */
+function snapLimits(spanDeg = 12) {
+  return {
+    maxSnapDeg: clamp(spanDeg * 0.3, 1.5, MAX_SNAP_DEG),
+  };
+}
+
+function drawingLayout(drawing, { spanDeg = 12, xToward = "west" } = {}) {
   const xs = drawing.points.map((point) => point.x);
   const ys = drawing.points.map((point) => point.y);
   const minX = Math.min(...xs);
@@ -23,89 +27,157 @@ export function projectEuclideanToSky(
   const maxY = Math.max(...ys);
   const width = Math.max(maxX - minX, 1e-9);
   const height = Math.max(maxY - minY, 1e-9);
-  const scale = spanDeg / Math.max(width, height);
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-  const xSign = xToward === "west" ? 1 : -1;
+  return {
+    scale: spanDeg / Math.max(width, height),
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+    xSign: xToward === "west" ? 1 : -1,
+  };
+}
 
+function projectPoint(point, center, layout) {
+  const westDeg = (point.x - layout.cx) * layout.scale * layout.xSign;
+  const northDeg = (point.y - layout.cy) * layout.scale;
+  const eastDeg = -westDeg;
+  return {
+    target: raDecFromLocalOffsets(center, eastDeg, northDeg),
+    eastDeg,
+    northDeg,
+  };
+}
+
+/** Rigid 2D fit (rotate + translate, no scale) taking `from` onto `to`. */
+function fitRigid(from, to) {
+  const n = from.length;
+  if (n === 0) return (point) => point;
+  let ax = 0;
+  let ay = 0;
+  let bx = 0;
+  let by = 0;
+  for (let i = 0; i < n; i += 1) {
+    ax += from[i].x;
+    ay += from[i].y;
+    bx += to[i].x;
+    by += to[i].y;
+  }
+  ax /= n;
+  ay /= n;
+  bx /= n;
+  by /= n;
+  if (n === 1) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    return (point) => ({ x: point.x + dx, y: point.y + dy });
+  }
+  let dot = 0;
+  let cross = 0;
+  for (let i = 0; i < n; i += 1) {
+    const fx = from[i].x - ax;
+    const fy = from[i].y - ay;
+    const tx = to[i].x - bx;
+    const ty = to[i].y - by;
+    dot += fx * tx + fy * ty;
+    cross += fx * ty - fy * tx;
+  }
+  const angle = Math.atan2(cross, dot);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return (point) => {
+    const dx = point.x - ax;
+    const dy = point.y - ay;
+    return {
+      x: cos * dx - sin * dy + bx,
+      y: sin * dx + cos * dy + by,
+    };
+  };
+}
+
+export function projectEuclideanToSky(
+  drawing,
+  zenith,
+  options = {},
+) {
+  const layout = drawingLayout(drawing, options);
   return drawing.points.map((point) => {
-    const westDeg = (point.x - cx) * scale * xSign;
-    const northDeg = (point.y - cy) * scale;
-    const sky = raDecFromLocalOffsets(zenith, -westDeg, northDeg);
+    const projected = projectPoint(point, zenith, layout);
     return {
       id: point.id,
       x: point.x,
       y: point.y,
-      target: sky,
+      ...projected,
     };
   });
 }
 
-export function isWellKnown(star) {
-  if (star.kind && star.kind !== "star") return Boolean(star.name);
-  return Boolean(star.name) && star.vmag <= WELL_KNOWN_MAG;
+function markClosed(points, closed) {
+  points.closed = closed;
+  return points;
 }
 
-function nearestDistance(target, stars, used) {
-  let nearest = Infinity;
-  for (const star of stars) {
-    if (used.has(catalogId(star))) {
-      continue;
-    }
-    const distance = angularDistanceDeg(target, star);
-    if (distance < nearest) {
-      nearest = distance;
-    }
-  }
-  return nearest;
+/** Rings as point arrays. `ring.closed === false` means an open Canny chain. */
+export function outlineRings(mapped) {
+  const raw = mapped?.outlines?.length
+    ? mapped.outlines
+    : (mapped?.outline?.length ? [mapped.outline] : []);
+  return raw.map((ring) => {
+    if (Array.isArray(ring)) return markClosed(ring, ring.closed !== false);
+    const points = ring?.points ?? [];
+    return markClosed(points, ring?.closed !== false);
+  }).filter((ring) => ring.length);
 }
 
-function pickStarForShape(target, stars, used) {
+function projectRing(ring, center, layout, apply) {
+  return ring.map((point) => {
+    const projected = projectPoint(point, center, layout);
+    if (!apply) return { ra: projected.target.ra, dec: projected.target.dec };
+    const fitted = apply({ x: projected.eastDeg, y: projected.northDeg });
+    return raDecFromLocalOffsets(center, fitted.x, fitted.y);
+  });
+}
+
+function projectOutlines(drawing, center, options, vertices) {
+  const rings = drawing.outlines?.length ? drawing.outlines : (drawing.outline?.length ? [drawing.outline] : []);
+  if (!rings.length) return [];
+  const layout = drawingLayout(drawing, options);
+  const pairs = vertices.filter((vertex) => vertex.star);
+  const apply = pairs.length >= 2
+    ? fitRigid(
+      pairs.map((vertex) => ({ x: vertex.eastDeg, y: vertex.northDeg })),
+      pairs.map((vertex) => {
+        const offset = localOffsetsFromRaDec(center, vertex.star);
+        return { x: offset.eastDeg, y: offset.northDeg };
+      }),
+    )
+    : null;
+  return rings.filter((ring) => ring.length >= 3).map((ring) => (
+    markClosed(projectRing(ring, center, layout, apply), ring.closed !== false)
+  ));
+}
+
+function isCatalogStar(body) {
+  return !body.kind || body.kind === "star";
+}
+
+/** Stars inside the snap radius, nearest first. Planets and deep-sky objects are skipped. */
+function candidatesFor(target, stars, maxSnapDeg) {
   const candidates = [];
   for (const star of stars) {
-    if (used.has(catalogId(star))) {
-      continue;
-    }
-    if (star.kind && star.kind !== "star") {
-      continue;
-    }
+    if (!isCatalogStar(star)) continue;
     const distance = angularDistanceDeg(target, star);
-    if (distance > MAX_SNAP_DEG) {
-      continue;
-    }
+    if (distance > maxSnapDeg) continue;
     candidates.push({ star, distance });
   }
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const minDistance = Math.min(...candidates.map((candidate) => candidate.distance));
-  const pool = candidates.filter((candidate) => {
-    const slack = isWellKnown(candidate.star) ? NAMED_SLACK_DEG : BRIGHT_SLACK_DEG;
-    return candidate.distance <= minDistance + slack;
-  });
-
-  pool.sort((a, b) => {
-    const knownDiff = Number(isWellKnown(b.star)) - Number(isWellKnown(a.star));
-    if (knownDiff !== 0) {
-      return knownDiff;
-    }
-    if (a.star.vmag !== b.star.vmag) {
-      return a.star.vmag - b.star.vmag;
-    }
-    return a.distance - b.distance;
-  });
-
-  return pool[0];
+  candidates.sort((a, b) => a.distance - b.distance);
+  return candidates;
 }
 
 export function snapToNearestStars(
   projectedPoints,
   stars,
   zenith,
-  { unique = true, maxZenithDistanceDeg = 80, excludeHips = [] } = {},
+  { unique = true, maxZenithDistanceDeg = 80, excludeHips = [], spanDeg = 12 } = {},
 ) {
+  const limits = snapLimits(spanDeg);
   const visible = stars.filter(
     (star) => angularDistanceDeg(zenith, star) <= maxZenithDistanceDeg,
   );
@@ -116,52 +188,33 @@ export function snapToNearestStars(
     star: null,
     snapDistanceDeg: null,
   }));
+  const pools = vertices.map((vertex) => candidatesFor(vertex.target, visible, limits.maxSnapDeg));
+  const cursor = pools.map(() => 0);
+  const open = new Set(vertices.map((_, index) => index));
 
-  const namedClaims = visible
-    .filter(isWellKnown)
-    .map((star) => {
-      let pointIndex = -1;
-      let distance = Infinity;
-      projectedPoints.forEach((point, index) => {
-        const starDistance = angularDistanceDeg(point.target, star);
-        if (starDistance < distance) {
-          distance = starDistance;
-          pointIndex = index;
-        }
-      });
-      return { star, pointIndex, distance };
-    })
-    .filter((claim) => claim.distance <= NAMED_ASSIGN_DEG)
-    .sort((a, b) => a.distance - b.distance);
-
-  for (const claim of namedClaims) {
-    const vertex = vertices[claim.pointIndex];
-    if (vertex.star || (unique && used.has(catalogId(claim.star)))) {
-      continue;
+  // Assign the closest remaining pair first so two vertices don't fight over one star
+  // and pull the figure off the drawing.
+  while (open.size > 0) {
+    let best = null;
+    for (const index of open) {
+      const pool = pools[index];
+      let next = cursor[index];
+      while (next < pool.length && unique && used.has(catalogId(pool[next].star))) next += 1;
+      cursor[index] = next;
+      if (next >= pool.length) continue;
+      const candidate = pool[next];
+      if (!best || candidate.distance < best.distance) {
+        best = { index, star: candidate.star, distance: candidate.distance };
+      }
     }
-    const closestAny = nearestDistance(vertex.target, visible, used);
-    if (claim.distance > closestAny + NAMED_SLACK_DEG) {
-      continue;
-    }
-    vertex.star = claim.star;
-    vertex.snapDistanceDeg = claim.distance;
-    if (unique) {
-      used.add(catalogId(claim.star));
-    }
-  }
-
-  for (const vertex of vertices) {
-    if (vertex.star) {
-      continue;
-    }
-    const picked = pickStarForShape(vertex.target, visible, unique ? used : new Set());
-    if (!picked) {
-      continue;
-    }
-    vertex.star = picked.star;
-    vertex.snapDistanceDeg = picked.distance;
-    if (unique) {
-      used.add(catalogId(picked.star));
+    if (!best) break;
+    const vertex = vertices[best.index];
+    vertex.star = best.star;
+    vertex.snapDistanceDeg = best.distance;
+    if (unique) used.add(catalogId(best.star));
+    open.delete(best.index);
+    for (const index of [...open]) {
+      if (cursor[index] >= pools[index].length) open.delete(index);
     }
   }
 
@@ -173,13 +226,16 @@ export function snapToNearestStars(
  * drawing is laid out on the sky (the zenith when omitted).
  */
 export function mapEuclideanConstellation(drawing, stars, zenith, options = {}) {
-  const projected = projectEuclideanToSky(drawing, options.center ?? zenith, options);
+  const center = options.center ?? zenith;
+  const projected = projectEuclideanToSky(drawing, center, options);
   const vertices = snapToNearestStars(projected, stars, zenith, options);
-
+  const outlines = projectOutlines(drawing, center, options, vertices);
   return {
     name: drawing.name,
     id: drawing.id,
     lines: drawing.lines,
     vertices,
+    outlines,
+    outline: outlines[0] ?? [],
   };
 }

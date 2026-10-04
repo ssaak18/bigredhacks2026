@@ -58,7 +58,17 @@
   font-size: 0.78rem;
 }
 
-.saved-constellations__field input,
+.saved-constellations__field output {
+  color: #94aed6;
+  font-variant-numeric: tabular-nums;
+}
+
+.saved-constellations__field input[type="range"] {
+  width: 100%;
+  accent-color: #94aed6;
+}
+
+.saved-constellations__field input:not([type="range"]),
 .saved-constellations__field textarea {
   box-sizing: border-box;
   width: 100%;
@@ -122,15 +132,14 @@
   justify-content: flex-end;
   padding: 88px 28px 28px 20px;
   background: transparent;
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
 }
 
 .polaroid-stack {
   display: grid;
   justify-items: center;
   max-width: min(340px, 36vw);
-  cursor: default;
+  pointer-events: auto;
 }
 
 .polaroid {
@@ -139,13 +148,12 @@
   width: min(312px, 34vw);
   height: auto;
   margin: 0;
-  padding: 12px 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 22px;
-  background: #f4efe6;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 28px 70px rgba(0, 0, 0, 0.42);
+  padding: 10px 10px 12px;
+  border: 1px solid rgba(148, 174, 214, 0.28);
+  border-radius: 18px;
+  background: rgba(7, 13, 30, 0.9);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
 }
 
 .polaroid img,
@@ -153,11 +161,11 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: min(32vh, 240px);
+  max-height: min(22vh, 160px);
   object-fit: contain;
   object-position: center;
-  background: #e6e0d6;
-  border-radius: 14px;
+  background: rgba(4, 8, 20, 0.72);
+  border-radius: 12px;
 }
 
 .polaroid__blank {
@@ -166,8 +174,8 @@
 
 .polaroid figcaption {
   display: grid;
-  gap: 10px;
-  padding: 12px 8px 2px;
+  gap: 8px;
+  padding: 8px 8px 2px;
 }
 
 .polaroid__title {
@@ -176,9 +184,9 @@
   overflow: hidden;
   margin: 0;
   width: 100%;
-  min-height: 36px;
-  max-height: 52px;
-  color: #1d1a16;
+  min-height: 28px;
+  max-height: 44px;
+  color: #f4f7ff;
   font-family: "Caveat", "Segoe Script", "Comic Sans MS", cursive;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -187,12 +195,20 @@
   overflow-wrap: anywhere;
 }
 
+.polaroid__note {
+  margin: 0;
+  color: #d5def4;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .polaroid__meta {
   display: grid;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
   margin: 0;
   padding-top: 8px;
-  border-top: 1px solid rgba(29, 26, 22, 0.1);
+  border-top: 1px solid rgba(148, 174, 214, 0.18);
 }
 
 .polaroid__meta div {
@@ -201,7 +217,7 @@
 }
 
 .polaroid__meta dt {
-  color: #7a7268;
+  color: #94aed6;
   font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -210,18 +226,23 @@
 
 .polaroid__meta dd {
   margin: 0;
-  color: #2b261f;
+  color: #d5def4;
   font-size: 0.86rem;
   line-height: 1.35;
 }
 
-.polaroid__delete {
-  justify-self: start;
+.polaroid__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 2px;
+}
+
+.polaroid__close,
+.polaroid__delete {
   border: 0;
   padding: 0;
   background: transparent;
-  color: #8a5a4a;
   font: inherit;
   font-size: 0.74rem;
   font-weight: 700;
@@ -229,8 +250,20 @@
   cursor: pointer;
 }
 
+.polaroid__close {
+  color: #94aed6;
+}
+
+.polaroid__close:hover {
+  color: #d7e3f4;
+}
+
+.polaroid__delete {
+  color: #c9b4c8;
+}
+
 .polaroid__delete:hover {
-  color: #5f382e;
+  color: #f4f7ff;
 }
 
 @media (max-width: 720px) {

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import ImageUploader from "./components/ImageUploader";
 import ImageViewer from "./components/ImageViewer";
 import { analyzePhoto, disposeVisionWorker } from "./vision/client";
+import { cannyChains, EDGE_THRESHOLD } from "./vision/canny";
 import { buildConstellation, toEuclideanDrawing } from "./vision/constellation";
+import { SKY_SPAN } from "../constellations/placeInSky";
 import { POINT_COUNT } from "./vision/config";
 import "./StarForeground.css";
 
@@ -18,6 +20,8 @@ export default function StarForeground({ onConstellation, compact = false, hidde
   const [imageReady, setImageReady] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [pointCount, setPointCount] = useState(POINT_COUNT.default);
+  const [spanDeg, setSpanDeg] = useState(SKY_SPAN.default);
+  const [edgeThreshold, setEdgeThreshold] = useState(EDGE_THRESHOLD.default);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -28,6 +32,14 @@ export default function StarForeground({ onConstellation, compact = false, hidde
     () => (analysis ? buildConstellation(analysis, pointCount) : null),
     [analysis, pointCount],
   );
+
+  const edgeChains = useMemo(() => {
+    if (!analysis) return [];
+    if (analysis.gray && analysis.mask) {
+      return cannyChains(analysis.gray, analysis.width, analysis.height, analysis.mask, edgeThreshold);
+    }
+    return [analysis.outline, ...(analysis.features ?? [])].filter((chain) => chain?.length);
+  }, [analysis, edgeThreshold]);
 
   // Hand-moved stars (debug mode) belong to one generated constellation and are dropped with it.
   const [edits, setEdits] = useState({ base: null, moved: {} });
@@ -90,8 +102,23 @@ export default function StarForeground({ onConstellation, compact = false, hidde
   const place = () => {
     const name = analysis.label.replace(/^./, (letter) => letter.toUpperCase());
     onConstellation?.(
-      toEuclideanDrawing(constellation, { id: `photo-${analysis.label}`, name }),
-      { file, label: analysis.label },
+      toEuclideanDrawing(constellation, {
+        id: `photo-${analysis.label}`,
+        name,
+        edges: edgeChains.map((chain) => chain.map((point) => ({
+          x: point.x / analysis.width,
+          y: point.y / analysis.height,
+        }))),
+        outline: analysis.outline.map((point) => ({
+          x: point.x / analysis.width,
+          y: point.y / analysis.height,
+        })),
+        features: (analysis.features ?? []).map((ring) => ring.map((point) => ({
+          x: point.x / analysis.width,
+          y: point.y / analysis.height,
+        }))),
+      }),
+      { file, label: analysis.label, spanDeg },
     );
   };
 
@@ -118,6 +145,7 @@ export default function StarForeground({ onConstellation, compact = false, hidde
             onImageReady={() => setImageReady(true)}
             onImageError={() => setError("This image could not be decoded. Choose another JPG, PNG, or WebP image.")}
             analysis={analysis}
+            edges={edgeChains}
             constellation={constellation}
             isProcessing={isProcessing}
             progress={progress}
@@ -133,6 +161,10 @@ export default function StarForeground({ onConstellation, compact = false, hidde
             onDebugChange={setDebug}
             pointCount={pointCount}
             onPointCountChange={setPointCount}
+            spanDeg={spanDeg}
+            onSpanDegChange={setSpanDeg}
+            edgeThreshold={edgeThreshold}
+            onEdgeThresholdChange={setEdgeThreshold}
           />
           {error && <p className="vision-error" role="alert">{error}</p>}
         </div>

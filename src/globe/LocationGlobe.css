@@ -19,26 +19,36 @@
 }
 
 .location-globe__compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 58px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #94aed6;
+  cursor: pointer;
+}
+
+.location-globe__compass svg {
+  display: block;
+  box-sizing: border-box;
   width: 52px;
   height: 52px;
   padding: 8px;
   border: 1px solid rgba(148, 174, 214, 0.35);
   border-radius: 50%;
   background: rgba(7, 13, 30, 0.88);
-  color: #94aed6;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(16px);
-  cursor: pointer;
-}
-
-.location-globe__compass svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .location-globe__compass:hover {
   color: #d7e3f4;
+}
+
+.location-globe__compass:hover svg {
   background: rgba(12, 20, 40, 0.94);
 }
 

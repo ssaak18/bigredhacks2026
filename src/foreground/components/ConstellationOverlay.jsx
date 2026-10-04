@@ -9,7 +9,7 @@ const clamp01 = (value) => Math.min(1, Math.max(0, value));
  * outline, every candidate that was not selected, and part names are shown, and
  * stars can be dragged (`onMovePoint(id, { x, y })`, both as fractions of the photo).
  */
-export default function ConstellationOverlay({ constellation, analysis, debug, onMovePoint }) {
+export default function ConstellationOverlay({ constellation, analysis, edges, debug, onMovePoint }) {
   const { aspect, points, lines } = constellation;
   const svgRef = useRef(null);
   const byId = new Map(points.map((point) => [point.id, point]));
@@ -37,9 +37,28 @@ export default function ConstellationOverlay({ constellation, analysis, debug, o
 
   return (
     <svg ref={svgRef} className="constellation-overlay" viewBox={`0 0 ${aspect} 1`} aria-label="Generated constellation">
+      {analysis && (
+        <g className="subject-outlines">
+          {edges?.length
+            ? edges.map((chain, i) => (
+              <polyline
+                key={`edge-${i}`}
+                className="silhouette-outline"
+                points={chain.map((p) => { const v = fromGrid(p); return `${v.x},${v.y}`; }).join(" ")}
+              />
+            ))
+            : (
+              <>
+                <polygon className="silhouette-outline" points={analysis.outline.map((p) => { const v = fromGrid(p); return `${v.x},${v.y}`; }).join(" ")} />
+                {(analysis.features ?? []).map((ring, i) => (
+                  <polygon key={`feature-${i}`} className="silhouette-outline" points={ring.map((p) => { const v = fromGrid(p); return `${v.x},${v.y}`; }).join(" ")} />
+                ))}
+              </>
+            )}
+        </g>
+      )}
       {debug && (
         <g className="debug-layer">
-          <polygon className="silhouette-outline" points={analysis.outline.map((p) => { const v = fromGrid(p); return `${v.x},${v.y}`; }).join(" ")} />
           {analysis.corners.map((corner, i) => <circle key={`c${i}`} className="debug-candidate" cx={fromGrid(corner).x} cy={fromGrid(corner).y} r="0.005" fill={KIND_COLOR.corner} />)}
           {analysis.parts.map((part, i) => <circle key={`p${i}`} className="debug-candidate" cx={fromGrid(part).x} cy={fromGrid(part).y} r="0.006" fill={KIND_COLOR.part} />)}
         </g>

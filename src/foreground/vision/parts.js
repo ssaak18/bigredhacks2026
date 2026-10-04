@@ -110,6 +110,7 @@ export async function detectParts({ models, image, subject, grid, scale, cornerP
         shape: spec.shape,
         x: (box.x0 + box.x1) / 2,
         y: (box.y0 + box.y1) / 2,
+        box,
         priority: spec.weight * (0.5 + 0.5 * (box.score / candidates[0].score)),
         corners: spec.shape === "box" ? snapCorners(box, cornerPool) : undefined,
       });

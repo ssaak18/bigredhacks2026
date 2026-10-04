@@ -84,6 +84,24 @@
   pointer-events: none;
 }
 
+.aladin-star-map__outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.aladin-star-map__outline polygon,
+.aladin-star-map__outline polyline {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
 .aladin-star-map__grab {
   position: absolute;
   pointer-events: auto;

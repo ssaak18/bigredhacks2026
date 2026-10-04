@@ -6,6 +6,16 @@ export const LAYER_STYLES = {
   selected: { line: "#7f9ec8", star: "#d7e3f4" },
 };
 
+/** Filled circle in screen pixels. Radius does not follow the field of view. */
+export function starDot(color, radius) {
+  return (source, ctx) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(source.x, source.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  };
+}
+
 function geometry(mapped, lineColor) {
   const byId = new Map(
     mapped.vertices.filter((vertex) => vertex.star).map((vertex) => [vertex.id, vertex]),
@@ -39,9 +49,23 @@ export function removeConstellationLayer(aladin, layer) {
   aladin.removeOverlay(layer.catalog);
 }
 
+export function setConstellationLayerVisible(layer, visible) {
+  if (!layer) return;
+  const overlay = layer.overlay;
+  const catalog = layer.catalog;
+  if (visible) {
+    overlay?.show?.();
+    catalog?.show?.();
+    return;
+  }
+  overlay?.hide?.();
+  catalog?.hide?.();
+}
+
 /**
  * Draws `mapped` ({ name, lines, vertices }) as lines and stars. `style` is one of
  * LAYER_STYLES. Selecting is handled by the map's own click test, not by Aladin.
+ * The subject silhouette is a separate SVG layer in AladinStarMap.
  */
 export function addConstellationLayer(aladin, mapped, { style = "saved" } = {}) {
   const { line: lineColor, star: starColor } = LAYER_STYLES[style] ?? LAYER_STYLES.saved;
@@ -57,8 +81,8 @@ export function addConstellationLayer(aladin, mapped, { style = "saved" } = {}) 
   const catalog = A.catalog({
     name: " ",
     color: starColor,
-    sourceSize: 18,
-    shape: "circle",
+    sourceSize: 8,
+    shape: starDot(starColor, 3.2),
     onClick: false,
   });
   aladin.addCatalog(catalog);

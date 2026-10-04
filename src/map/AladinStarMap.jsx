@@ -5,8 +5,11 @@ import { solarSystemBodies } from "../astro/solarSystem";
 import {
   addConstellationLayer,
   removeConstellationLayer,
+  setConstellationLayerVisible,
+  starDot,
   updateConstellationLayer,
 } from "../constellations/aladinLayer";
+import { outlineRings } from "../constellations/mapToStars";
 import { skyCentroid } from "../constellations/overlap";
 import { slideMapped } from "../constellations/placeInSky";
 import { inspectableBodies } from "../data/celestialBodies";
@@ -19,7 +22,7 @@ const FIELD_STARS = hipparcosBright.filter((star) => star.vmag <= 5.6);
 
 const HORIZON_FOV = 155;
 const NO_CONSTELLATIONS = [];
-const STAR_HIT_PX = 18;
+const STAR_HIT_PX = 28;
 const LINE_HIT_PX = 10;
 const DSS2_COLOR_ID = "P/DSS2/color";
 
@@ -95,6 +98,7 @@ function constellationAt(aladin, constellations, x, y) {
   for (const constellation of constellations) {
     const points = new Map();
     for (const vertex of constellation.vertices) {
+      if (!vertex.star) continue;
       const pixel = aladin.world2pix(vertex.star.ra, vertex.star.dec);
       if (pixel && Number.isFinite(pixel[0]) && Number.isFinite(pixel[1])) {
         points.set(vertex.id, pixel);
@@ -109,6 +113,22 @@ function constellationAt(aladin, constellations, x, y) {
       const to = points.get(line.to);
       if (from && to) margin = Math.max(margin, LINE_HIT_PX - distanceToSegment(x, y, from, to));
     }
+    for (const outline of outlineRings(constellation)) {
+      const last = outline.closed === false ? outline.length - 1 : outline.length;
+      for (let i = 0; i < last; i += 1) {
+        const fromSky = outline[i];
+        const toSky = outline[(i + 1) % outline.length];
+        const from = aladin.world2pix(fromSky.ra, fromSky.dec);
+        const to = aladin.world2pix(toSky.ra, toSky.dec);
+        if (
+          from && to
+          && Number.isFinite(from[0]) && Number.isFinite(from[1])
+          && Number.isFinite(to[0]) && Number.isFinite(to[1])
+        ) {
+          margin = Math.max(margin, LINE_HIT_PX - distanceToSegment(x, y, from, to));
+        }
+      }
+    }
     if (margin >= bestMargin && margin >= 0) {
       hit = constellation.id;
       bestMargin = margin;
@@ -117,20 +137,41 @@ function constellationAt(aladin, constellations, x, y) {
   return hit;
 }
 
-function objectAt(aladin, x, y, date) {
-  const bodies = inspectableBodies(date, FIELD_STARS);
+/** The constellation vertex under the cursor, including stars too faint for the field catalog. */
+function constellationStarAt(aladin, constellations, x, y) {
   let hit = null;
-  let best = 16;
-  for (const body of bodies) {
-    const pixel = aladin.world2pix(body.ra, body.dec);
-    if (!pixel || !Number.isFinite(pixel[0]) || !Number.isFinite(pixel[1])) continue;
-    const distance = Math.hypot(pixel[0] - x, pixel[1] - y);
-    if (distance < best) {
-      hit = body;
-      best = distance;
+  let best = STAR_HIT_PX;
+  for (const constellation of constellations) {
+    if (!constellation?.vertices) continue;
+    for (const vertex of constellation.vertices) {
+      const star = vertex.star;
+      if (!star || !Number.isFinite(star.ra) || !Number.isFinite(star.dec)) continue;
+      const pixel = aladin.world2pix(star.ra, star.dec);
+      if (!pixel || !Number.isFinite(pixel[0]) || !Number.isFinite(pixel[1])) continue;
+      const distance = Math.hypot(pixel[0] - x, pixel[1] - y);
+      if (distance < best) {
+        best = distance;
+        hit = { star, id: constellation.id ?? null, distance };
+      }
     }
   }
   return hit;
+}
+
+function objectAt(aladin, x, y, date) {
+  const bodies = inspectableBodies(date, FIELD_STARS);
+  let body = null;
+  let best = 28;
+  for (const candidate of bodies) {
+    const pixel = aladin.world2pix(candidate.ra, candidate.dec);
+    if (!pixel || !Number.isFinite(pixel[0]) || !Number.isFinite(pixel[1])) continue;
+    const distance = Math.hypot(pixel[0] - x, pixel[1] - y);
+    if (distance < best) {
+      body = candidate;
+      best = distance;
+    }
+  }
+  return body ? { body, distance: best } : null;
 }
 
 function setCatalogVisible(catalog, visible) {
@@ -142,14 +183,40 @@ function setCatalogVisible(catalog, visible) {
   if (typeof catalog.hide === "function") catalog.hide();
 }
 
-function applySkyLayer(aladin, view, showImage, fieldLayers = []) {
+function applySkyLayer(aladin, view, { sky = true, stars = false } = {}, fieldLayers = []) {
   const layer = aladin?.getBaseImageLayer?.();
   if (layer && typeof layer.setOpacity === "function") {
-    layer.setOpacity(showImage ? 1 : 0);
+    layer.setOpacity(sky ? 1 : 0);
   }
   const canvas = view?.querySelector(".aladin-imageCanvas");
-  if (canvas) canvas.style.opacity = showImage ? "1" : "0";
-  fieldLayers.forEach((catalog) => setCatalogVisible(catalog, !showImage));
+  if (canvas) canvas.style.opacity = sky ? "1" : "0";
+  fieldLayers.forEach((catalog) => setCatalogVisible(catalog, stars));
+}
+
+function outlineScreenPath(aladin, outline) {
+  if (!aladin || !outline?.length) return "";
+  const points = [];
+  for (const point of outline) {
+    const pixel = aladin.world2pix(point.ra, point.dec);
+    if (!pixel || !Number.isFinite(pixel[0]) || !Number.isFinite(pixel[1])) continue;
+    points.push(`${pixel[0]},${pixel[1]}`);
+  }
+  return points.length >= 2 ? points.join(" ") : "";
+}
+
+function collectOutlinePaths(aladin, draft, saved) {
+  const paths = [];
+  outlineRings(draft).forEach((ring, index) => {
+    const points = outlineScreenPath(aladin, ring);
+    if (points) paths.push({ id: `draft-${index}`, points, closed: ring.closed !== false });
+  });
+  for (const record of saved) {
+    outlineRings(record).forEach((ring, index) => {
+      const points = outlineScreenPath(aladin, ring);
+      if (points) paths.push({ id: `${record.id}-${index}`, points, closed: ring.closed !== false });
+    });
+  }
+  return paths;
 }
 
 function grabLayout(aladin, mapped) {
@@ -159,6 +226,12 @@ function grabLayout(aladin, mapped) {
     if (!vertex.star) continue;
     const pixel = aladin.world2pix(vertex.star.ra, vertex.star.dec);
     if (pixel && Number.isFinite(pixel[0]) && Number.isFinite(pixel[1])) pixels.push(pixel);
+  }
+  for (const ring of outlineRings(mapped)) {
+    for (const point of ring) {
+      const pixel = aladin.world2pix(point.ra, point.dec);
+      if (pixel && Number.isFinite(pixel[0]) && Number.isFinite(pixel[1])) pixels.push(pixel);
+    }
   }
   if (!pixels.length) return null;
   const xs = pixels.map((pixel) => pixel[0]);
@@ -213,26 +286,39 @@ const ALADIN_CHROME = [
   "button",
 ].join(",");
 
+function addStarCatalog(aladin, stars, color, radius) {
+  const catalog = A.catalog({
+    name: " ",
+    color,
+    sourceSize: radius * 2,
+    shape: starDot(color, radius),
+    onClick: false,
+  });
+  catalog.addSources(stars.map((star) => A.marker(star.ra, star.dec)));
+  aladin.addCatalog(catalog);
+  return catalog;
+}
+
 function addFieldStars(aladin) {
-  const bright = A.catalog({
-    name: " ",
-    color: "#f4f7ff",
-    sourceSize: 14,
-    shape: "circle",
-    onClick: false,
-  });
-  const dim = A.catalog({
-    name: " ",
-    color: "#c5d0e4",
-    sourceSize: 7,
-    shape: "circle",
-    onClick: false,
-  });
-  bright.addSources(FIELD_STARS.filter((star) => star.vmag <= 3.2).map((star) => A.marker(star.ra, star.dec)));
-  dim.addSources(FIELD_STARS.filter((star) => star.vmag > 3.2).map((star) => A.marker(star.ra, star.dec)));
-  aladin.addCatalog(dim);
-  aladin.addCatalog(bright);
-  return [dim, bright];
+  const bright = addStarCatalog(
+    aladin,
+    FIELD_STARS.filter((star) => star.vmag <= 2),
+    "#f4f7ff",
+    3,
+  );
+  const mid = addStarCatalog(
+    aladin,
+    FIELD_STARS.filter((star) => star.vmag > 2 && star.vmag <= 3.8),
+    "#d5deee",
+    2.2,
+  );
+  const dim = addStarCatalog(
+    aladin,
+    FIELD_STARS.filter((star) => star.vmag > 3.8),
+    "#9aabc4",
+    1.6,
+  );
+  return [dim, mid, bright];
 }
 
 function syncWanderers(aladin, layer, date) {
@@ -268,7 +354,7 @@ export default function AladinStarMap({
   placing = false,
   saved = NO_CONSTELLATIONS,
   selectedId = null,
-  telescope = true,
+  layers = { sky: true, stars: false, constellations: true, outlines: true },
   skyObject = null,
   onSelect,
   onSelectObject,
@@ -293,11 +379,12 @@ export default function AladinStarMap({
   const draftLayerRef = useRef(null);
   const wanderersRef = useRef(null);
   const fieldLayersRef = useRef([]);
-  const telescopeRef = useRef(telescope);
+  const mapLayersRef = useRef(layers);
   const skyObjectRef = useRef(skyObject);
   const dragRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [handle, setHandle] = useState(null);
+  const [outlines, setOutlines] = useState([]);
   const [objectPin, setObjectPin] = useState(null);
   const [initError, setInitError] = useState(null);
 
@@ -308,7 +395,7 @@ export default function AladinStarMap({
   savedRef.current = saved;
   draftRef.current = draft;
   placingRef.current = placing;
-  telescopeRef.current = telescope;
+  mapLayersRef.current = layers;
   skyObjectRef.current = skyObject;
 
   const syncObjectPin = () => {
@@ -346,6 +433,7 @@ export default function AladinStarMap({
     const aladin = aladinRef.current;
     if (!aladin) return;
     setHandle(grabLayout(aladin, draftRef.current));
+    setOutlines(collectOutlinePaths(aladin, draftRef.current, savedRef.current));
     syncObjectPin();
   };
 
@@ -377,6 +465,7 @@ export default function AladinStarMap({
       );
     }
     layersRef.current = added;
+    added.forEach((layer) => setConstellationLayerVisible(layer, mapLayersRef.current.constellations));
     syncPins();
 
     return () => {
@@ -413,6 +502,7 @@ export default function AladinStarMap({
     } else {
       draftLayerRef.current = updateConstellationLayer(aladin, draftLayerRef.current, draft);
     }
+    setConstellationLayerVisible(draftLayerRef.current, mapLayersRef.current.constellations);
     syncPins();
     return undefined;
   }, [mapReady, draft]);
@@ -508,8 +598,8 @@ export default function AladinStarMap({
         const wanderers = A.catalog({
           name: " ",
           color: "#d7c48a",
-          sourceSize: 16,
-          shape: "circle",
+          sourceSize: 8,
+          shape: starDot("#d7c48a", 3.6),
           onClick: false,
         });
         aladin.addCatalog(wanderers);
@@ -542,35 +632,40 @@ export default function AladinStarMap({
         aladin.on("click", (event) => {
           const xy = clickXY(event, viewRef.current);
           if (!xy) return;
+          const date = new Date(placeRef.current.time);
+          const figures = draftRef.current ? [draftRef.current, ...savedRef.current] : savedRef.current;
+          const starHit = constellationStarAt(aladin, figures, xy.x, xy.y);
+          const field = objectAt(aladin, xy.x, xy.y, date);
+          if (starHit && (!field || starHit.distance <= field.distance)) {
+            onSelectObjectRef.current?.(starHit.star);
+            return;
+          }
           const hit = constellationAt(aladin, savedRef.current, xy.x, xy.y);
           if (hit) {
             onSelectRef.current?.(hit);
             return;
           }
-          const body = objectAt(aladin, xy.x, xy.y, new Date(placeRef.current.time));
-          if (body) {
-            onSelectObjectRef.current?.(body);
+          if (field) {
+            onSelectObjectRef.current?.(field.body);
             return;
           }
           if (!placingRef.current) onSkyClickRef.current?.();
         });
         aladin.on("objectClicked", (object) => {
-          if (!object) return;
-          const ra = object.ra;
-          const dec = object.dec;
-          const match = savedRef.current.find((record) =>
-            record.vertices.some((vertex) => vertex.star.ra === ra && vertex.star.dec === dec),
-          );
-          if (match) {
-            onSelectRef.current?.(match.id);
+          if (!object || !Number.isFinite(object.ra) || !Number.isFinite(object.dec)) return;
+          const pixel = aladin.world2pix(object.ra, object.dec);
+          if (!pixel || !Number.isFinite(pixel[0])) return;
+          const date = new Date(placeRef.current.time);
+          const figures = draftRef.current ? [draftRef.current, ...savedRef.current] : savedRef.current;
+          const starHit = constellationStarAt(aladin, figures, pixel[0], pixel[1]);
+          const field = objectAt(aladin, pixel[0], pixel[1], date);
+          if (starHit && (!field || starHit.distance <= field.distance)) {
+            onSelectObjectRef.current?.(starHit.star);
             return;
           }
-          const pixel = aladin.world2pix(ra, dec);
-          if (!pixel || !Number.isFinite(pixel[0])) return;
-          const body = objectAt(aladin, pixel[0], pixel[1], new Date(placeRef.current.time));
-          if (body) onSelectObjectRef.current?.(body);
+          if (field) onSelectObjectRef.current?.(field.body);
         });
-        applySkyLayer(aladin, viewRef.current, telescopeRef.current, [
+        applySkyLayer(aladin, viewRef.current, mapLayersRef.current, [
           ...fieldLayersRef.current,
           wanderers,
         ]);
@@ -624,11 +719,13 @@ export default function AladinStarMap({
   }, [latitude, longitude, time]);
 
   useEffect(() => {
-    applySkyLayer(aladinRef.current, viewRef.current, telescope, [
+    applySkyLayer(aladinRef.current, viewRef.current, layers, [
       ...fieldLayersRef.current,
       wanderersRef.current,
     ]);
-  }, [telescope, mapReady]);
+    layersRef.current.forEach((layer) => setConstellationLayerVisible(layer, layers.constellations));
+    setConstellationLayerVisible(draftLayerRef.current, layers.constellations);
+  }, [layers, mapReady]);
 
   useEffect(() => {
     syncObjectPin();
@@ -648,9 +745,18 @@ export default function AladinStarMap({
   }, [recenterRequest]);
 
   return (
-    <div className={`aladin-star-map${placing ? " aladin-star-map--placing" : ""}${telescope ? " aladin-star-map--telescope" : ""}`} data-layer="starmap">
+    <div className={`aladin-star-map${placing ? " aladin-star-map--placing" : ""}${layers.sky ? " aladin-star-map--telescope" : ""}`} data-layer="starmap">
       <div ref={viewRef} className="aladin-star-map__view" />
-      <div className="aladin-star-map__pins" aria-hidden={!handle}>
+      <div className="aladin-star-map__pins" aria-hidden={!handle && !outlines.length}>
+        {layers.outlines && outlines.length ? (
+          <svg className="aladin-star-map__outline" aria-hidden="true">
+            {outlines.map((outline) => (
+              outline.closed
+                ? <polygon key={outline.id} points={outline.points} />
+                : <polyline key={outline.id} points={outline.points} fill="none" />
+            ))}
+          </svg>
+        ) : null}
         {handle && placing ? (
           <div
             className="aladin-star-map__grab"
@@ -668,6 +774,7 @@ export default function AladinStarMap({
               const box = view.getBoundingClientRect();
               const origin = skyFromPix(aladin, event.clientX - box.left, event.clientY - box.top);
               if (!origin) return;
+              const start = { x: event.clientX, y: event.clientY };
               dragRef.current = { origin, mapped };
               let frame = 0;
               const drag = (moveEvent) => {
@@ -694,6 +801,16 @@ export default function AladinStarMap({
                 const latest = dragRef.current;
                 dragRef.current = null;
                 if (!latest) return;
+                const moved = Math.hypot(upEvent.clientX - start.x, upEvent.clientY - start.y);
+                if (moved < 6) {
+                  const xy = { x: upEvent.clientX - box.left, y: upEvent.clientY - box.top };
+                  const figures = [draftRef.current, ...savedRef.current];
+                  const starHit = constellationStarAt(aladin, figures, xy.x, xy.y);
+                  if (starHit) {
+                    onSelectObjectRef.current?.(starHit.star);
+                    return;
+                  }
+                }
                 const sky = skyFromPix(aladin, upEvent.clientX - box.left, upEvent.clientY - box.top);
                 const slid = sky ? slideMapped(latest.mapped, latest.origin, sky) : draftRef.current;
                 const center = slid ? skyCentroid(slid) : null;
@@ -711,7 +828,7 @@ export default function AladinStarMap({
       {skyObject && objectPin ? (
         <SkyObjectCard object={skyObject} anchor={objectPin} onClose={onCloseObject} />
       ) : null}
-      {telescope ? (
+      {layers.sky ? (
         <p className="aladin-star-map__credit">DSS2 color · STScI/NASA · CDS</p>
       ) : null}
       {initError ? <p className="aladin-star-map__error">{initError}</p> : null}

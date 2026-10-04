@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { SKY_SPAN } from "../../constellations/placeInSky";
+import { EDGE_THRESHOLD } from "../vision/canny";
 import { POINT_COUNT } from "../vision/config";
 import ConstellationOverlay from "./ConstellationOverlay";
 
@@ -25,10 +27,11 @@ function statusText({ isProcessing, progress, constellation, analysis, imageRead
 
 export default function ImageViewer({
   imageUrl, imageReady, onImageReady, onImageError,
-  analysis, constellation, isProcessing, progress,
+  analysis, edges, constellation, isProcessing, progress,
   onAnalyze, onClear, onPlace, onMovePoint, onResetPoints,
   choosing, onChoosingChange, onChooseSubject,
   debug, onDebugChange, pointCount, onPointCountChange,
+  spanDeg, onSpanDegChange, edgeThreshold, onEdgeThresholdChange,
 }) {
   const showMask = debug || choosing;
   const maskUrl = useMemo(() => (showMask ? createMaskUrl(analysis) : null), [showMask, analysis]);
@@ -61,7 +64,7 @@ export default function ImageViewer({
         <div className={choosing ? "image-canvas choosing" : "image-canvas"} onClick={handleChoose}>
           <img src={imageUrl} alt="Selected source" onLoad={onImageReady} onError={onImageError} />
           {maskUrl && <img className="debug-mask" src={maskUrl} alt="Detected subject mask" />}
-          {constellation && <ConstellationOverlay constellation={constellation} analysis={analysis} debug={debug} onMovePoint={choosing ? undefined : onMovePoint} />}
+          {constellation && <ConstellationOverlay constellation={constellation} analysis={analysis} edges={edges} debug={debug} onMovePoint={choosing ? undefined : onMovePoint} />}
         </div>
         {isProcessing && <div className="processing-scrim" role="status"><span /></div>}
       </div>
@@ -79,20 +82,44 @@ export default function ImageViewer({
         </p>
       )}
       <div className="analysis-controls">
-        <label>
-          Stars <output>{pointCount}</output>
-          <input
-            type="range"
-            min={POINT_COUNT.min}
-            max={POINT_COUNT.max}
-            value={pointCount}
-            onChange={(event) => onPointCountChange(Number(event.target.value))}
-          />
-        </label>
-        <label className="debug-toggle">
-          <input type="checkbox" checked={debug} onChange={(event) => onDebugChange(event.target.checked)} /> Debug
-        </label>
-        <button className="analyze-button" type="button" onClick={onPlace} disabled={!constellation || isProcessing}>Place on the sky</button>
+        <div className="analysis-sliders">
+          <label>
+            Stars <output>{pointCount}</output>
+            <input
+              type="range"
+              min={POINT_COUNT.min}
+              max={POINT_COUNT.max}
+              value={pointCount}
+              onChange={(event) => onPointCountChange(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Size <output>{spanDeg}°</output>
+            <input
+              type="range"
+              min={SKY_SPAN.min}
+              max={SKY_SPAN.max}
+              value={spanDeg}
+              onChange={(event) => onSpanDegChange(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Threshold <output>{edgeThreshold}</output>
+            <input
+              type="range"
+              min={EDGE_THRESHOLD.min}
+              max={EDGE_THRESHOLD.max}
+              value={edgeThreshold}
+              onChange={(event) => onEdgeThresholdChange(Number(event.target.value))}
+            />
+          </label>
+        </div>
+        <div className="analysis-actions">
+          <label className="debug-toggle">
+            <input type="checkbox" checked={debug} onChange={(event) => onDebugChange(event.target.checked)} /> Debug
+          </label>
+          <button className="analyze-button" type="button" onClick={onPlace} disabled={!constellation || isProcessing}>Place on the sky</button>
+        </div>
       </div>
     </section>
   );

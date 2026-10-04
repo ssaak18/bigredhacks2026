@@ -7,6 +7,7 @@ import { formatCoordinates, formatDeclination, formatRightAscension, zenithEquat
 import "./LocationGlobe.css";
 
 const EARTH_RADIUS = 1;
+const EARTH_TEXTURE_URL = `${import.meta.env.BASE_URL}textures/earth.jpg`;
 
 function placeMarker(marker, ring, latitude, longitude) {
   const pin = vectorFromLatLon(latitude, longitude, EARTH_RADIUS + 0.025);
@@ -147,8 +148,15 @@ export default function LocationGlobe({ place, time = Date.now(), onSelect }) {
     scene.add(marker, ring);
     placeMarker(marker, ring, placeRef.current.latitude, placeRef.current.longitude);
 
-    const loader = new THREE.TextureLoader();
-    const texture = loader.load("/textures/earth.jpg");
+    let alive = true;
+    const texture = new THREE.TextureLoader().load(
+      EARTH_TEXTURE_URL,
+      undefined,
+      undefined,
+      () => {
+        if (alive) setGlobeError("The Earth map could not be loaded.");
+      },
+    );
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     material.map = texture;
@@ -229,6 +237,7 @@ export default function LocationGlobe({ place, time = Date.now(), onSelect }) {
     tick();
 
     return () => {
+      alive = false;
       cancelAnimationFrame(frame);
       flightId += 1;
       observer.disconnect();
@@ -300,6 +309,7 @@ export default function LocationGlobe({ place, time = Date.now(), onSelect }) {
           <path d="M32 10 L38 32 L32 54 L26 32 Z" fill="currentColor" />
           <circle cx="32" cy="32" r="4" fill="#09142f" />
         </svg>
+        <span className="sky-tool__label">Location</span>
       </button>
       {open ? (
         <section className="location-globe__card" aria-label="Earth">

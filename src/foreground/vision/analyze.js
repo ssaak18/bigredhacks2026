@@ -1,6 +1,7 @@
 import { findCorners } from "./corners.js";
 import { GRID_SIZE } from "./config.js";
 import { perimeter, resampleClosed, smoothClosed, traceOuterContour, vertexImportance } from "./contour.js";
+import { traceFeatureRings } from "./features.js";
 import { fitSize, toGrayGrid } from "./image.js";
 import { erode } from "./mask.js";
 import { detectParts, refineKind } from "./parts.js";
@@ -40,8 +41,8 @@ export async function analyzeImage(image, models, onProgress = () => {}, { point
   onProgress("Tracing the silhouette…");
   const boundary = traceOuterContour(subject.mask, grid.width, grid.height);
   if (boundary.length < 24) throw new Error("The subject's outline was too small to use.");
-  const smoothed = smoothClosed(boundary, 2);
-  const samples = Math.min(360, Math.max(120, Math.round(perimeter(smoothed) / 2)));
+  const smoothed = smoothClosed(boundary, 1);
+  const samples = Math.min(1440, Math.max(400, Math.round(perimeter(smoothed) * 1.5)));
   const outlinePoints = resampleClosed(smoothed, samples);
   const importance = vertexImportance(outlinePoints);
   const outline = outlinePoints.map((point, i) => ({
@@ -53,10 +54,10 @@ export async function analyzeImage(image, models, onProgress = () => {}, { point
   const gray = toGrayGrid(image, grid.width, grid.height);
   const cornerPool = findCorners(gray, grid.width, grid.height, subject.mask, {
     scale: size,
-    separation: Math.round(size * 0.04),
+    separation: Math.round(size * 0.025),
   });
   const interior = erode(subject.mask, grid.width, grid.height, Math.max(2, Math.round(size * 0.03)));
-  const corners = cornerPool.filter(({ x, y }) => interior[y * grid.width + x]).slice(0, 60);
+  const corners = cornerPool.filter(({ x, y }) => interior[y * grid.width + x]).slice(0, 180);
 
   onProgress("Looking for eyes, noses, paws and other features…");
   let parts = [];
@@ -70,6 +71,15 @@ export async function analyzeImage(image, models, onProgress = () => {}, { point
     warning = `Feature detection was unavailable (${error instanceof Error ? error.message : "unknown error"}); using the outline only.`;
   }
 
+  const features = traceFeatureRings({
+    gray,
+    mask: subject.mask,
+    parts,
+    width: grid.width,
+    height: grid.height,
+    size,
+  });
+
   return {
     width: grid.width,
     height: grid.height,
@@ -79,7 +89,9 @@ export async function analyzeImage(image, models, onProgress = () => {}, { point
     area: bounds.area,
     bounds,
     mask: subject.mask,
+    gray,
     outline,
+    features,
     corners,
     parts,
     warning,

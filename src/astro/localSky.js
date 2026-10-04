@@ -87,6 +87,20 @@ export function raDecFromLocalOffsets(zenith, eastDeg, northDeg) {
   };
 }
 
+/** Inverse of `raDecFromLocalOffsets`: east/north degrees of `sky` from `center`. */
+export function localOffsetsFromRaDec(center, sky) {
+  const dec0 = center.dec * DEG;
+  const dec = sky.dec * DEG;
+  const dRa = Math.atan2(Math.sin((sky.ra - center.ra) * DEG), Math.cos((sky.ra - center.ra) * DEG));
+  const cosRho = Math.sin(dec0) * Math.sin(dec) + Math.cos(dec0) * Math.cos(dec) * Math.cos(dRa);
+  const rhoDeg = Math.acos(Math.max(-1, Math.min(1, cosRho))) / DEG;
+  const pa = Math.atan2(
+    Math.sin(dRa) * Math.cos(dec),
+    Math.cos(dec0) * Math.sin(dec) - Math.sin(dec0) * Math.cos(dec) * Math.cos(dRa),
+  );
+  return { eastDeg: rhoDeg * Math.sin(pa), northDeg: rhoDeg * Math.cos(pa) };
+}
+
 export function formatLatitude(latitudeDeg) {
   const hemisphere = latitudeDeg >= 0 ? "N" : "S";
   return `${Math.abs(latitudeDeg).toFixed(2)}°${hemisphere}`;

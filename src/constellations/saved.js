@@ -50,6 +50,10 @@ export function buildSavedRecord({ mapped, place, time, image, label, name, note
       },
     }));
   const ids = new Set(vertices.map((vertex) => vertex.id));
+  const outlines = (mapped.outlines ?? (mapped.outline ? [mapped.outline] : [])).map((ring) => ({
+    closed: ring.closed !== false,
+    points: ring.map((point) => ({ ra: point.ra, dec: point.dec })),
+  }));
   return {
     id: `saved-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     name,
@@ -66,6 +70,8 @@ export function buildSavedRecord({ mapped, place, time, image, label, name, note
     image,
     vertices,
     lines: mapped.lines.filter((line) => ids.has(line.from) && ids.has(line.to)),
+    outlines,
+    outline: outlines[0] ?? [],
   };
 }
 
@@ -76,6 +82,18 @@ export function loadSaved() {
   } catch {
     return [];
   }
+}
+
+/** True when `body` is one of the snapped stars in this saved constellation. */
+export function recordHasStar(record, body) {
+  if (!record || !body) return false;
+  return (record.vertices ?? []).some((vertex) => {
+    const star = vertex.star;
+    if (!star) return false;
+    if (star.hip != null && body.hip != null && star.hip === body.hip) return true;
+    if (star.id && body.id && star.id === body.id) return true;
+    return Math.abs(star.ra - body.ra) < 0.01 && Math.abs(star.dec - body.dec) < 0.01;
+  });
 }
 
 /** Returns true when the list was stored; false when the browser refused (quota, private mode). */

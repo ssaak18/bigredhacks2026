@@ -17,6 +17,7 @@ export default function RecenterButton({ onClick }) {
           strokeLinecap="round"
         />
       </svg>
+      <span className="sky-tool__label">Recenter</span>
     </button>
   );
 }
